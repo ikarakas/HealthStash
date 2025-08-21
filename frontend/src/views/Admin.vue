@@ -52,16 +52,91 @@
       </div>
       
       <div class="backup-section">
-        <h2>Backup Management</h2>
-        <button @click="createBackup">Create Backup Now</button>
+        <div class="section-header">
+          <h2>Backup Management</h2>
+          <button @click="createBackup" class="primary-btn">
+            <span class="btn-icon">+</span>
+            Create Backup Now
+          </button>
+        </div>
+        
+        <div class="backup-stats">
+          <div class="backup-stat">
+            <div class="stat-icon success">✓</div>
+            <div class="stat-details">
+              <span class="stat-number">{{ backups.filter(b => b.status === 'completed').length }}</span>
+              <span class="stat-label">Successful</span>
+            </div>
+          </div>
+          <div class="backup-stat">
+            <div class="stat-icon warning">⚠</div>
+            <div class="stat-details">
+              <span class="stat-number">{{ backups.filter(b => b.status === 'in_progress').length }}</span>
+              <span class="stat-label">In Progress</span>
+            </div>
+          </div>
+          <div class="backup-stat">
+            <div class="stat-icon error">✕</div>
+            <div class="stat-details">
+              <span class="stat-number">{{ backups.filter(b => b.status === 'failed').length }}</span>
+              <span class="stat-label">Failed</span>
+            </div>
+          </div>
+          <div class="backup-stat">
+            <div class="stat-icon info">📅</div>
+            <div class="stat-details">
+              <span class="stat-number">{{ getLastBackupTime() }}</span>
+              <span class="stat-label">Last Backup</span>
+            </div>
+          </div>
+        </div>
         
         <div v-if="backups.length > 0" class="backup-list">
-          <div v-for="backup in backups" :key="backup.id" class="backup-item">
-            <span>{{ formatDate(backup.created_at) }}</span>
-            <span>{{ backup.status }}</span>
-            <button v-if="backup.status === 'completed'" @click="restoreBackup(backup.id)">
-              Restore
-            </button>
+          <div class="backup-list-header">
+            <span>Date & Time</span>
+            <span>Status</span>
+            <span>Size</span>
+            <span>Duration</span>
+            <span>Actions</span>
+          </div>
+          <div v-for="backup in backups" :key="backup.id" class="backup-item" :class="`status-${backup.status}`">
+            <div class="backup-date">
+              <div class="date-primary">{{ formatBackupDate(backup.created_at) }}</div>
+              <div class="date-secondary">{{ formatBackupTime(backup.created_at) }}</div>
+            </div>
+            <div class="backup-status">
+              <span class="status-badge" :class="`badge-${backup.status}`">
+                <span v-if="backup.status === 'completed'" class="status-icon">✓</span>
+                <span v-else-if="backup.status === 'failed'" class="status-icon">✕</span>
+                <span v-else-if="backup.status === 'in_progress'" class="status-icon spinning">⟳</span>
+                {{ formatStatus(backup.status) }}
+              </span>
+              <div v-if="backup.error_message" class="error-message">{{ backup.error_message }}</div>
+            </div>
+            <div class="backup-size">{{ formatBackupSize(backup.size_mb) }}</div>
+            <div class="backup-duration">{{ formatDuration(backup.duration_seconds) }}</div>
+            <div class="backup-actions">
+              <button v-if="backup.status === 'completed'" @click="restoreBackup(backup.id)" class="action-btn restore">
+                <span title="Restore">⟲</span>
+              </button>
+              <button v-if="backup.status === 'failed'" @click="retryBackup(backup.id)" class="action-btn retry">
+                <span title="Retry">↻</span>
+              </button>
+              <button v-if="backup.status === 'completed'" @click="downloadBackup(backup.id)" class="action-btn download">
+                <span title="Download">↓</span>
+              </button>
+              <button @click="deleteBackup(backup.id)" class="action-btn delete">
+                <span title="Delete">🗑</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else class="no-backups">
+          <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <p>No backups found</p>
+            <span>Create your first backup to protect your data</span>
           </div>
         </div>
       </div>
@@ -196,6 +271,97 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString()
 }
 
+const formatBackupDate = (date) => {
+  const d = new Date(date)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const formatBackupTime = (date) => {
+  const d = new Date(date)
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+}
+
+const formatStatus = (status) => {
+  const statusMap = {
+    'completed': 'Completed',
+    'failed': 'Failed',
+    'in_progress': 'In Progress',
+    'pending': 'Pending'
+  }
+  return statusMap[status] || status
+}
+
+const formatBackupSize = (sizeMb) => {
+  if (!sizeMb) return '—'
+  if (sizeMb < 1) return `${(sizeMb * 1024).toFixed(0)} KB`
+  if (sizeMb < 1024) return `${sizeMb.toFixed(1)} MB`
+  return `${(sizeMb / 1024).toFixed(2)} GB`
+}
+
+const formatDuration = (seconds) => {
+  if (!seconds) return '—'
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return `${hours}h ${remainingMinutes}m`
+}
+
+const getLastBackupTime = () => {
+  const completed = backups.value.filter(b => b.status === 'completed')
+  if (completed.length === 0) return 'Never'
+  const lastBackup = new Date(completed[0].created_at)
+  const now = new Date()
+  const diffMs = now - lastBackup
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  if (diffHours < 1) return 'Just now'
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays === 1) return 'Yesterday'
+  return `${diffDays} days ago`
+}
+
+const retryBackup = async (backupId) => {
+  try {
+    await api.post(`/backup/retry/${backupId}`)
+    alert('Backup retry initiated')
+    await fetchBackups()
+  } catch (error) {
+    console.error('Failed to retry backup:', error)
+    alert('Failed to retry backup')
+  }
+}
+
+const downloadBackup = async (backupId) => {
+  try {
+    const response = await api.get(`/backup/download/${backupId}`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `backup-${backupId}.tar.gz`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } catch (error) {
+    console.error('Failed to download backup:', error)
+    alert('Failed to download backup')
+  }
+}
+
+const deleteBackup = async (backupId) => {
+  if (!confirm('Are you sure you want to delete this backup?')) return
+  
+  try {
+    await api.delete(`/backup/${backupId}`)
+    await fetchBackups()
+  } catch (error) {
+    console.error('Failed to delete backup:', error)
+    alert('Failed to delete backup')
+  }
+}
+
 onMounted(() => {
   fetchStats()
   fetchUsers()
@@ -312,5 +478,318 @@ button.danger {
   padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+/* Backup Section Styles */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.primary-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-icon {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.backup-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.backup-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.stat-icon.success {
+  background: #d4edda;
+  color: #28a745;
+}
+
+.stat-icon.warning {
+  background: #fff3cd;
+  color: #ffc107;
+}
+
+.stat-icon.error {
+  background: #f8d7da;
+  color: #dc3545;
+}
+
+.stat-icon.info {
+  background: #d1ecf1;
+  color: #17a2b8;
+}
+
+.stat-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-number {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #1e293b;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+.backup-list {
+  background: #f8fafc;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.backup-list-header {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.backup-item {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+  align-items: center;
+}
+
+.backup-item:hover {
+  background: #fafbfc;
+  transform: translateX(2px);
+}
+
+.backup-item:last-child {
+  border-bottom: none;
+}
+
+.backup-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.date-primary {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.9rem;
+}
+
+.date-secondary {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.backup-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.status-icon {
+  font-size: 0.875rem;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.badge-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badge-failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badge-in_progress {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge-pending {
+  background: #d1ecf1;
+  color: #004085;
+}
+
+.error-message {
+  font-size: 0.75rem;
+  color: #dc3545;
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.backup-size {
+  font-weight: 500;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.backup-duration {
+  font-weight: 500;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.1rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn.restore {
+  color: #10b981;
+}
+
+.action-btn.restore:hover {
+  background: #d4edda;
+  border-color: #10b981;
+}
+
+.action-btn.retry {
+  color: #f59e0b;
+}
+
+.action-btn.retry:hover {
+  background: #fff3cd;
+  border-color: #f59e0b;
+}
+
+.action-btn.download {
+  color: #3b82f6;
+}
+
+.action-btn.download:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.action-btn.delete {
+  color: #ef4444;
+}
+
+.action-btn.delete:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.no-backups {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 0;
+}
+
+.empty-state span {
+  font-size: 0.875rem;
+  color: #94a3b8;
 }
 </style>
