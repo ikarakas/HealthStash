@@ -86,7 +86,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../services/axios'
 
 const stats = ref({})
 const users = ref([])
@@ -102,7 +102,7 @@ const newUser = ref({
 
 const fetchStats = async () => {
   try {
-    const response = await axios.get('/api/admin/stats')
+    const response = await api.get('/admin/stats')
     stats.value = response.data
   } catch (error) {
     console.error('Failed to fetch stats:', error)
@@ -111,7 +111,7 @@ const fetchStats = async () => {
 
 const fetchUsers = async () => {
   try {
-    const response = await axios.get('/api/users/')
+    const response = await api.get('/users/')
     users.value = response.data
   } catch (error) {
     console.error('Failed to fetch users:', error)
@@ -120,7 +120,7 @@ const fetchUsers = async () => {
 
 const fetchBackups = async () => {
   try {
-    const response = await axios.get('/api/backup/history')
+    const response = await api.get('/backup/history')
     backups.value = response.data
   } catch (error) {
     console.error('Failed to fetch backups:', error)
@@ -129,7 +129,7 @@ const fetchBackups = async () => {
 
 const handleCreateUser = async () => {
   try {
-    const response = await axios.post('/api/admin/users', newUser.value)
+    const response = await api.post('/admin/users', newUser.value)
     showCreateUser.value = false
     newUser.value = { email: '', username: '', full_name: '', password: '' }
     await fetchUsers()
@@ -146,7 +146,7 @@ const resetPassword = async (userId) => {
   if (!newPassword) return
   
   try {
-    await axios.post(`/api/admin/users/${userId}/reset-password`, { new_password: newPassword })
+    await api.post(`/admin/users/${userId}/reset-password`, { new_password: newPassword })
     alert('Password reset successfully')
   } catch (error) {
     console.error('Failed to reset password:', error)
@@ -157,7 +157,7 @@ const deleteUser = async (userId) => {
   if (!confirm('Are you sure you want to delete this user?')) return
   
   try {
-    await axios.delete(`/api/users/${userId}`)
+    await api.delete(`/users/${userId}`)
     await fetchUsers()
   } catch (error) {
     console.error('Failed to delete user:', error)
@@ -166,7 +166,7 @@ const deleteUser = async (userId) => {
 
 const createBackup = async () => {
   try {
-    const response = await axios.post('/api/backup/create')
+    const response = await api.post('/backup/create')
     alert(response.data.message || 'Backup initiated successfully')
     await fetchBackups()
   } catch (error) {
@@ -180,7 +180,7 @@ const restoreBackup = async (backupId) => {
   if (!confirm('Are you sure you want to restore this backup?')) return
   
   try {
-    await axios.post(`/api/backup/restore/${backupId}`)
+    await api.post(`/backup/restore/${backupId}`)
     alert('Backup restored successfully')
   } catch (error) {
     console.error('Failed to restore backup:', error)

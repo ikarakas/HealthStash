@@ -31,6 +31,7 @@ class HealthRecord(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     category = Column(Enum(RecordCategory, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
+    categories = Column(Text, nullable=True)  # JSON array of categories
     
     file_name = Column(String, nullable=True)
     file_type = Column(String, nullable=True)
@@ -38,6 +39,8 @@ class HealthRecord(Base):
     file_checksum = Column(String, nullable=True)
     encrypted_file_key = Column(String, nullable=True)
     minio_object_name = Column(String, nullable=True)
+    thumbnail_data = Column(Text, nullable=True)  # Base64 encoded thumbnail
+    has_thumbnail = Column(Boolean, default=False, nullable=False)
     
     provider_name = Column(String, nullable=True)
     service_date = Column(DateTime, nullable=True, index=True)

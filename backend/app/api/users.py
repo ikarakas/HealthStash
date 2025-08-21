@@ -27,13 +27,27 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     }
     return user_dict
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("/")
 async def list_users(
     admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
     users = db.query(User).all()
-    return users
+    return [
+        {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role.value if hasattr(user.role, 'value') else user.role,
+            "is_active": user.is_active,
+            "storage_quota_mb": user.storage_quota_mb,
+            "storage_used_mb": user.storage_used_mb,
+            "created_at": user.created_at,
+            "last_login": user.last_login
+        }
+        for user in users
+    ]
 
 @router.put("/{user_id}/quota")
 async def update_user_quota(

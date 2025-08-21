@@ -47,6 +47,18 @@ const routes = [
     name: 'Admin',
     component: () => import('@/views/Admin.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/mobile-upload',
+    name: 'MobileUpload',
+    component: () => import('@/views/MobileUpload.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/m/:token',
+    name: 'MobileTokenUpload',
+    component: () => import('@/views/MobileTokenUpload.vue'),
+    meta: { requiresAuth: false }
   }
 ]
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 import uuid
@@ -122,8 +123,8 @@ async def get_system_stats(
     }
     
     # Storage statistics
-    total_storage = db.query(db.func.sum(User.storage_used_mb)).scalar() or 0
-    total_quota = db.query(db.func.sum(User.storage_quota_mb)).scalar() or 0
+    total_storage = db.query(func.sum(User.storage_used_mb)).scalar() or 0
+    total_quota = db.query(func.sum(User.storage_quota_mb)).scalar() or 0
     
     stats["storage"] = {
         "total_used_mb": total_storage,

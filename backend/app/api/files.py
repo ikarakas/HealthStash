@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
 import os
+import io
 from datetime import datetime
 
 from app.core.database import get_db
@@ -109,6 +111,17 @@ async def upload_file(
     
     db.add(record)
     
+    # Generate thumbnail for images
+    if file.content_type and file.content_type.startswith('image/'):
+        try:
+            from app.services.thumbnail import generate_image_thumbnail
+            thumbnail = generate_image_thumbnail(contents, size=(200, 200))
+            if thumbnail:
+                record.thumbnail_data = thumbnail
+                record.has_thumbnail = True
+        except:
+            pass
+    
     # Update user storage
     current_user.storage_used_mb += file_size / 1024 / 1024
     
@@ -167,11 +180,14 @@ async def download_file(
     db.add(audit)
     db.commit()
     
-    return {
-        "filename": record.file_name,
-        "content_type": record.file_type,
-        "content": decrypted_content
-    }
+    # Return file as streaming response
+    return StreamingResponse(
+        io.BytesIO(decrypted_content),
+        media_type=record.file_type or 'application/octet-stream',
+        headers={
+            "Content-Disposition": f'attachment; filename="{record.file_name}"'
+        }
+    )
 
 @router.delete("/{record_id}")
 async def delete_file(

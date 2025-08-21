@@ -113,7 +113,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../services/axios'
 
 // Helper function to get current local datetime string for input
 const getCurrentDateTime = () => {
@@ -153,7 +153,7 @@ const addVital = async () => {
       recordedTime = localDate.toISOString()
     }
     
-    await axios.post('/api/vitals/', {
+    await api.post('/vitals/', {
       vital_type: newVital.value.type,
       value: parseFloat(newVital.value.value),
       unit: newVital.value.unit,
@@ -179,7 +179,7 @@ const addVital = async () => {
 
 const fetchLatestVitals = async () => {
   try {
-    const response = await axios.get('/api/vitals/latest')
+    const response = await api.get('/vitals/latest')
     latestVitals.value = response.data
   } catch (error) {
     console.error('Failed to fetch latest vitals:', error)
@@ -196,7 +196,7 @@ const fetchHistory = async () => {
       params.vital_type = selectedVitalType.value
     }
     
-    const response = await axios.get('/api/vitals/', { params })
+    const response = await api.get('/vitals/', { params })
     vitalHistory.value = response.data
   } catch (error) {
     console.error('Failed to fetch history:', error)
@@ -217,7 +217,7 @@ const deleteVital = async (vitalId) => {
   }
   
   try {
-    await axios.delete(`/api/vitals/${vitalId}`)
+    await api.delete(`/vitals/${vitalId}`)
     // Refresh the history
     fetchHistory()
     // Refresh latest vitals
@@ -245,7 +245,7 @@ const deleteAllVitals = async () => {
       params.vital_type = selectedVitalType.value
     }
     
-    const response = await axios.delete('/api/vitals/all', { params })
+    const response = await api.delete('/vitals/all', { params })
     alert(response.data.message)
     
     // Clear the history

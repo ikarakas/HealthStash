@@ -49,7 +49,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import api from '../services/axios'
 
 const stats = ref({
   totalRecords: 0,
@@ -62,7 +62,7 @@ const stats = ref({
 
 const fetchStats = async () => {
   try {
-    const response = await axios.get('/api/records/stats')
+    const response = await api.get('/records/stats')
     const data = response.data
     
     stats.value = {

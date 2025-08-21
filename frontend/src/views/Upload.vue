@@ -5,13 +5,37 @@
     <form @submit.prevent="handleUpload" class="upload-form">
       <div class="form-group">
         <label for="file">Select File</label>
-        <input
-          id="file"
-          type="file"
-          @change="handleFileSelect"
-          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.dcm,.xls,.xlsx,.csv"
-          required
-        />
+        <div
+          class="file-drop-zone"
+          :class="{ 'dragging': isDragging, 'has-file': selectedFile }"
+          @drop="handleDrop"
+          @dragover="handleDragOver"
+          @dragenter="handleDragEnter"
+          @dragleave="handleDragLeave"
+        >
+          <input
+            id="file"
+            type="file"
+            @change="handleFileSelect"
+            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.dcm,.xls,.xlsx,.csv"
+            required
+            ref="fileInput"
+          />
+          <div class="drop-zone-content">
+            <svg v-if="!selectedFile" class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <p v-if="!selectedFile" class="drop-text">
+              Drop your file here or <span class="browse-link">browse</span>
+            </p>
+            <p v-else class="file-name">
+              📄 {{ selectedFile.name }}
+              <button type="button" @click.prevent="clearFile" class="clear-file">✕</button>
+            </p>
+          </div>
+        </div>
       </div>
       
       <div class="form-group">
@@ -85,26 +109,87 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
+import api from '../services/axios'
 
 const selectedFile = ref(null)
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
+const isDragging = ref(false)
+const fileInput = ref(null)
 
 const formData = ref({
   title: '',
   category: '',
   description: '',
   provider_name: '',
-  service_date: ''
+  service_date: new Date().toISOString().split('T')[0]
 })
 
 const handleFileSelect = (event) => {
-  selectedFile.value = event.target.files[0]
-  if (selectedFile.value && !formData.value.title) {
-    formData.value.title = selectedFile.value.name.replace(/\.[^/.]+$/, '')
+  const file = event.target.files[0]
+  processFile(file)
+}
+
+const processFile = (file) => {
+  if (!file) return
+  
+  // Check file type
+  const allowedExtensions = ['.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png', '.dcm', '.xls', '.xlsx', '.csv']
+  const fileName = file.name.toLowerCase()
+  const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext))
+  
+  if (!isAllowed) {
+    error.value = 'File type not allowed. Please select a valid file.'
+    return
   }
+  
+  selectedFile.value = file
+  if (!formData.value.title) {
+    formData.value.title = file.name.replace(/\.[^/.]+$/, '')
+  }
+  error.value = ''
+}
+
+const handleDrop = (event) => {
+  event.preventDefault()
+  isDragging.value = false
+  
+  const files = event.dataTransfer.files
+  if (files.length > 0) {
+    processFile(files[0])
+    // Update the file input
+    if (fileInput.value) {
+      const dataTransfer = new DataTransfer()
+      dataTransfer.items.add(files[0])
+      fileInput.value.files = dataTransfer.files
+    }
+  }
+}
+
+const handleDragOver = (event) => {
+  event.preventDefault()
+}
+
+const handleDragEnter = (event) => {
+  event.preventDefault()
+  isDragging.value = true
+}
+
+const handleDragLeave = (event) => {
+  event.preventDefault()
+  // Only set isDragging to false if we're leaving the drop zone entirely
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    isDragging.value = false
+  }
+}
+
+const clearFile = () => {
+  selectedFile.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+  formData.value.title = ''
 }
 
 const handleUpload = async () => {
@@ -121,7 +206,7 @@ const handleUpload = async () => {
     if (formData.value.provider_name) data.append('provider_name', formData.value.provider_name)
     if (formData.value.service_date) data.append('service_date', formData.value.service_date)
     
-    await axios.post('/api/files/upload', data, {
+    await api.post('/files/upload', data, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -136,9 +221,11 @@ const handleUpload = async () => {
       category: '',
       description: '',
       provider_name: '',
-      service_date: ''
+      service_date: new Date().toISOString().split('T')[0]
     }
-    document.getElementById('file').value = ''
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
     
     setTimeout(() => {
       success.value = false
@@ -192,12 +279,93 @@ textarea {
   font-size: 1rem;
 }
 
-input[type="file"] {
+.file-drop-zone {
+  position: relative;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  background: #f7fafc;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.file-drop-zone:hover {
+  border-color: #667eea;
+  background: #edf2f7;
+}
+
+.file-drop-zone.dragging {
+  border-color: #667eea;
+  background: #e9efff;
+  transform: scale(1.02);
+}
+
+.file-drop-zone.has-file {
+  border-color: #48bb78;
+  background: #f0fff4;
+}
+
+.file-drop-zone input[type="file"] {
+  position: absolute;
   width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: white;
+  height: 100%;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drop-zone-content {
+  pointer-events: none;
+}
+
+.upload-icon {
+  color: #667eea;
+  margin-bottom: 1rem;
+}
+
+.drop-text {
+  color: #4a5568;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.browse-link {
+  color: #667eea;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.file-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #2d3748;
+  font-weight: 500;
+  margin: 0;
+}
+
+.clear-file {
+  pointer-events: auto;
+  background: #e53e3e;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  transition: background 0.3s;
+}
+
+.clear-file:hover {
+  background: #c53030;
 }
 
 textarea {

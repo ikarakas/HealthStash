@@ -1,0 +1,37 @@
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield with Medical Cross -->
+  <g transform="translate(10, 5)">
+    <!-- Shield Background -->
+    <path d="M 20 5 L 40 5 Q 45 5 45 10 L 45 35 Q 45 45 30 50 Q 15 45 15 35 L 15 10 Q 15 5 20 5 Z" 
+          fill="url(#gradientShield)" stroke="#4a5568" stroke-width="1.5"/>
+    
+    <!-- Medical Cross -->
+    <rect x="26" y="15" width="8" height="20" fill="white" rx="1"/>
+    <rect x="20" y="21" width="20" height="8" fill="white" rx="1"/>
+    
+    <!-- Lock Icon -->
+    <g transform="translate(33, 10)">
+      <rect x="0" y="4" width="8" height="6" fill="#fbbf24" rx="1"/>
+      <path d="M 1 4 L 1 2 Q 1 0 4 0 Q 7 0 7 2 L 7 4" 
+            stroke="#fbbf24" stroke-width="1.5" fill="none"/>
+    </g>
+  </g>
+  
+  <!-- Text -->
+  <text x="60" y="35" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1a202c">
+    Health<tspan fill="#667eea">Stash</tspan>
+  </text>
+  
+  <!-- Tagline -->
+  <text x="60" y="48" font-family="Arial, sans-serif" font-size="10" fill="#64748b">
+    Your Private Health Vault
+  </text>
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradientShield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>

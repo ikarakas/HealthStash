@@ -1,14 +1,25 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timedelta
+from pydantic import BaseModel
+import json
+import logging
 
 from app.core.database import get_db
 from app.models.user import User
 from app.models.health_record import HealthRecord, RecordCategory
 from app.api.auth import get_current_user
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+class UpdateCategoriesRequest(BaseModel):
+    categories: List[str]
+
+class UpdateTitleRequest(BaseModel):
+    title: str
 
 @router.get("/")
 async def list_records(
@@ -45,11 +56,31 @@ async def list_records(
         )
     
     total = query.count()
-    records = query.order_by(HealthRecord.service_date.desc()).offset(offset).limit(limit).all()
+    records = query.order_by(HealthRecord.created_at.desc()).offset(offset).limit(limit).all()
+    
+    # Serialize records to include dates properly
+    serialized_records = []
+    for record in records:
+        serialized_records.append({
+            "id": record.id,
+            "title": record.title,
+            "description": record.description,
+            "category": record.category.value if record.category else None,
+            "file_name": record.file_name,
+            "file_type": record.file_type,
+            "file_size": record.file_size,
+            "provider_name": record.provider_name,
+            "service_date": record.service_date.isoformat() if record.service_date else None,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "is_deleted": record.is_deleted,
+            "categories": json.loads(record.categories) if record.categories else [record.category.value if record.category else None],
+            "has_thumbnail": record.has_thumbnail if hasattr(record, 'has_thumbnail') else False
+        })
     
     return {
         "total": total,
-        "records": records,
+        "records": serialized_records,
         "limit": limit,
         "offset": offset
     }
@@ -118,3 +149,108 @@ async def get_stats(
     ).order_by(HealthRecord.created_at.desc()).limit(5).all()
     
     return stats
+
+@router.patch("/{record_id}/title")
+async def update_record_title(
+    record_id: str,
+    request: UpdateTitleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    record = db.query(HealthRecord).filter(
+        HealthRecord.id == record_id,
+        HealthRecord.user_id == current_user.id,
+        HealthRecord.is_deleted == False
+    ).first()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Validate title
+    if not request.title or len(request.title.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    
+    if len(request.title) > 255:
+        raise HTTPException(status_code=400, detail="Title too long (max 255 characters)")
+    
+    # Update title
+    record.title = request.title.strip()
+    record.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Title updated successfully", "title": record.title}
+
+@router.patch("/{record_id}/categories")
+async def update_record_categories(
+    record_id: str,
+    request: UpdateCategoriesRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    record = db.query(HealthRecord).filter(
+        HealthRecord.id == record_id,
+        HealthRecord.user_id == current_user.id,
+        HealthRecord.is_deleted == False
+    ).first()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Validate categories
+    valid_categories = [cat.value for cat in RecordCategory]
+    for cat in request.categories:
+        if cat not in valid_categories:
+            raise HTTPException(status_code=400, detail=f"Invalid category: {cat}")
+    
+    # Update categories
+    record.categories = json.dumps(request.categories)
+    # Keep the primary category as the first one
+    if request.categories:
+        try:
+            record.category = RecordCategory(request.categories[0])
+        except:
+            pass
+    
+    db.commit()
+    
+    return {"message": "Categories updated successfully"}
+
+@router.get("/{record_id}/thumbnail")
+async def get_record_thumbnail(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    logger.info(f"Getting thumbnail for record {record_id} for user {current_user.id}")
+    
+    record = db.query(HealthRecord).options(
+        joinedload(HealthRecord.user)
+    ).filter(
+        HealthRecord.id == record_id,
+        HealthRecord.user_id == current_user.id,
+        HealthRecord.is_deleted == False
+    ).first()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    if not record.has_thumbnail or not record.thumbnail_data:
+        # Try to generate thumbnail if it's an image
+        if record.file_type and record.file_type.startswith('image/'):
+            # Generate thumbnail on the fly
+            from app.services.thumbnail import generate_thumbnail
+            try:
+                thumbnail = await generate_thumbnail(record)
+                if thumbnail:
+                    record.thumbnail_data = thumbnail
+                    record.has_thumbnail = True
+                    db.commit()
+                    return {"thumbnail": thumbnail}
+            except Exception as e:
+                logger.error(f"Failed to generate thumbnail: {e}")
+                # Return a placeholder for images that fail
+                return {"thumbnail": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjhmOWZhIi8+CiAgICA8dGV4dCB4PSIxMDAiIHk9IjEwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjYwIiBmaWxsPSIjY2JkNWUwIj7wn5ayPC90ZXh0Pgo8L3N2Zz4="}
+        
+        raise HTTPException(status_code=404, detail="No thumbnail available")
+    
+    return {"thumbnail": record.thumbnail_data}
