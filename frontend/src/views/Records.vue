@@ -62,9 +62,10 @@
             <tr>
               <th>Title</th>
               <th>Category</th>
+              <th>Location</th>
               <th>Provider</th>
               <th>Service Date</th>
-              <th>Upload Date</th>
+              <th>Upload Date/Time</th>
               <th>Size</th>
               <th>Actions</th>
             </tr>
@@ -93,9 +94,27 @@
                   {{ formatCategory(record.category) }}
                 </span>
               </td>
+              <td class="location-cell">
+                <span v-if="!record.editingLocation" @click="startEditLocation(record)" class="location-text">
+                  {{ record.location || '+ Add location' }}
+                </span>
+                <div v-else class="location-editor-compact">
+                  <input 
+                    v-model="record.tempLocation" 
+                    @keyup.enter="saveLocation(record)"
+                    @keyup.esc="cancelEditLocation(record)"
+                    placeholder="Enter location"
+                    class="location-input-compact"
+                  />
+                  <button @click="saveLocation(record)" class="save-btn-compact">✅</button>
+                  <button @click="cancelEditLocation(record)" class="cancel-btn-compact">❌</button>
+                </div>
+              </td>
               <td>{{ record.provider_name || '-' }}</td>
               <td>{{ record.service_date ? formatCompactDate(record.service_date) : '-' }}</td>
-              <td>{{ record.created_at ? formatCompactDate(record.created_at) : '-' }}</td>
+              <td class="datetime-cell" title="{{ formatDateWithTime(record.created_at) }}">
+                {{ record.created_at ? formatDateWithTime(record.created_at) : '-' }}
+              </td>
               <td>{{ formatFileSize(record.file_size) }}</td>
               <td class="actions-cell">
                 <button @click="downloadRecord(record.id)" class="compact-btn download" title="Download">⬇️</button>
@@ -186,10 +205,39 @@
             </div>
             
             <div class="record-meta">
-              <p class="date">📅 Uploaded: {{ formatDate(record.created_at) }}</p>
+              <p class="date">📅 Uploaded: {{ formatDateWithTime(record.created_at) }}</p>
               <p v-if="record.service_date" class="service-date">🏥 Service: {{ formatDate(record.service_date) }}</p>
               <p v-if="record.provider_name" class="provider">👨‍⚕️ {{ record.provider_name }}</p>
+              <p class="location">
+                📍 Location: 
+                <span v-if="!record.editingLocation" @click="startEditLocation(record)" class="location-edit">
+                  {{ record.location || 'Click to add location' }}
+                </span>
+                <span v-else class="location-editor">
+                  <input 
+                    v-model="record.tempLocation" 
+                    @keyup.enter="saveLocation(record)"
+                    @keyup.esc="cancelEditLocation(record)"
+                    placeholder="Enter location"
+                    class="location-input"
+                  />
+                  <button @click="saveLocation(record)" class="save-btn-small">✅</button>
+                  <button @click="cancelEditLocation(record)" class="cancel-btn-small">❌</button>
+                </span>
+              </p>
               <p v-if="record.file_size" class="size">💾 {{ formatFileSize(record.file_size) }}</p>
+              <p class="body-parts-info">
+                🫀 Body Areas: 
+                <span v-if="record.body_parts && record.body_parts.length > 0" class="body-parts-list">
+                  {{ formatBodyParts(record.body_parts) }}
+                </span>
+                <span v-else @click="openBodyDiagram(record)" class="add-body-parts">
+                  Click to indicate affected areas
+                </span>
+                <button v-if="record.body_parts && record.body_parts.length > 0" 
+                        @click="openBodyDiagram(record)" 
+                        class="edit-body-btn">Edit</button>
+              </p>
             </div>
             
             <div class="actions">
@@ -215,18 +263,39 @@
         </select>
       </div>
     </div>
+    
+    <!-- Body Diagram Modal -->
+    <div v-if="showBodyDiagram" class="modal-overlay" @click.self="closeBodyDiagram">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Indicate Affected Body Areas</h2>
+          <button @click="closeBodyDiagram" class="close-modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <HumanBodyDiagram v-model="tempBodyParts" />
+        </div>
+        <div class="modal-footer">
+          <button @click="saveBodyParts" class="save-body-btn">Save Body Areas</button>
+          <button @click="closeBodyDiagram" class="cancel-body-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import api from '../services/axios'
+import HumanBodyDiagram from '../components/HumanBodyDiagram.vue'
 
 const records = ref([])
 const loading = ref(false)
 const viewMode = ref('list')
 const currentPage = ref(1)
 const itemsPerPage = ref(20)
+const showBodyDiagram = ref(false)
+const currentBodyRecord = ref(null)
+const tempBodyParts = ref([])
 
 const filters = ref({
   category: '',
@@ -398,6 +467,34 @@ const saveTitle = async (record) => {
   }
 }
 
+// Location management
+const startEditLocation = (record) => {
+  record.editingLocation = true
+  record.tempLocation = record.location || ''
+  nextTick(() => {
+    const input = document.querySelector('.location-input, .location-input-compact')
+    if (input) input.focus()
+  })
+}
+
+const cancelEditLocation = (record) => {
+  record.editingLocation = false
+  record.tempLocation = record.location || ''
+}
+
+const saveLocation = async (record) => {
+  try {
+    await api.patch(`/records/${record.id}/location`, {
+      location: record.tempLocation.trim()
+    })
+    record.location = record.tempLocation.trim() || null
+    record.editingLocation = false
+  } catch (error) {
+    console.error('Failed to update location:', error)
+    alert('Failed to update location')
+  }
+}
+
 // Category management
 const startEditCategories = (record) => {
   record.editingCategories = true
@@ -542,12 +639,59 @@ const formatCompactDate = (date) => {
   })
 }
 
+const formatDateWithTime = (date) => {
+  if (!date) return 'N/A'
+  const d = new Date(date)
+  return d.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  })
+}
+
 const formatFileSize = (bytes) => {
   if (!bytes) return 'N/A'
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   if (bytes === 0) return '0 Bytes'
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+// Body parts management
+const openBodyDiagram = (record) => {
+  currentBodyRecord.value = record
+  tempBodyParts.value = record.body_parts ? [...record.body_parts] : []
+  showBodyDiagram.value = true
+}
+
+const closeBodyDiagram = () => {
+  showBodyDiagram.value = false
+  currentBodyRecord.value = null
+  tempBodyParts.value = []
+}
+
+const saveBodyParts = async () => {
+  if (!currentBodyRecord.value) return
+  
+  try {
+    await api.patch(`/records/${currentBodyRecord.value.id}/body-parts`, {
+      body_parts: tempBodyParts.value
+    })
+    currentBodyRecord.value.body_parts = [...tempBodyParts.value]
+    closeBodyDiagram()
+  } catch (error) {
+    console.error('Failed to update body parts:', error)
+    alert('Failed to update body parts')
+  }
+}
+
+const formatBodyParts = (parts) => {
+  if (!parts || parts.length === 0) return 'None specified'
+  return parts.map(part => part.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ')
 }
 
 onMounted(() => {
@@ -1088,6 +1232,91 @@ tr:hover .edit-title-btn-compact {
   background: #ef4444;
 }
 
+/* Location editing */
+.location-cell {
+  cursor: pointer;
+}
+
+.location-text {
+  color: #1e293b;
+  text-decoration: underline dotted;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.location-text:hover {
+  color: #667eea;
+}
+
+.location-edit {
+  color: #64748b;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  transition: color 0.2s;
+}
+
+.location-edit:hover {
+  color: #667eea;
+}
+
+.location-editor {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.location-input {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  min-width: 150px;
+}
+
+.location-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.location-editor-compact {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.location-input-compact {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  min-width: 120px;
+}
+
+.save-btn-small, .cancel-btn-small {
+  padding: 0.125rem 0.25rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  background: transparent;
+}
+
+.save-btn-small:hover {
+  background: #10b981;
+}
+
+.cancel-btn-small:hover {
+  background: #ef4444;
+}
+
+/* Date time cell */
+.datetime-cell {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
 /* Categories */
 .categories-section {
   margin-bottom: 1rem;
@@ -1267,6 +1496,139 @@ tr:hover .edit-title-btn-compact {
   background: #f8fafc;
   border-radius: 12px;
   border: 2px dashed #e2e8f0;
+}
+
+/* Body Parts */
+.body-parts-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.375rem 0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.body-parts-list {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.add-body-parts {
+  color: #667eea;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  transition: color 0.2s;
+}
+
+.add-body-parts:hover {
+  color: #5a67d8;
+}
+
+.edit-body-btn {
+  padding: 0.125rem 0.5rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-body-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #1a202c;
+  font-size: 1.5rem;
+}
+
+.close-modal {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+.close-modal:hover {
+  color: #1a202c;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  justify-content: flex-end;
+}
+
+.save-body-btn {
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-body-btn:hover {
+  background: #5a67d8;
+}
+
+.cancel-body-btn {
+  padding: 0.75rem 1.5rem;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-body-btn:hover {
+  background: #e5e7eb;
 }
 
 /* Compact Table View */

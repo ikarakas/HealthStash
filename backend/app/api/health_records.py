@@ -21,6 +21,12 @@ class UpdateCategoriesRequest(BaseModel):
 class UpdateTitleRequest(BaseModel):
     title: str
 
+class UpdateLocationRequest(BaseModel):
+    location: str
+
+class UpdateBodyPartsRequest(BaseModel):
+    body_parts: List[str]
+
 @router.get("/")
 async def list_records(
     category: Optional[RecordCategory] = None,
@@ -70,6 +76,8 @@ async def list_records(
             "file_type": record.file_type,
             "file_size": record.file_size,
             "provider_name": record.provider_name,
+            "location": record.location,
+            "body_parts": json.loads(record.body_parts) if record.body_parts else [],
             "service_date": record.service_date.isoformat() if record.service_date else None,
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
@@ -179,6 +187,52 @@ async def update_record_title(
     db.commit()
     
     return {"message": "Title updated successfully", "title": record.title}
+
+@router.patch("/{record_id}/location")
+async def update_record_location(
+    record_id: str,
+    request: UpdateLocationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    record = db.query(HealthRecord).filter(
+        HealthRecord.id == record_id,
+        HealthRecord.user_id == current_user.id,
+        HealthRecord.is_deleted == False
+    ).first()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Update location (can be empty)
+    record.location = request.location.strip() if request.location else None
+    record.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Location updated successfully", "location": record.location}
+
+@router.patch("/{record_id}/body-parts")
+async def update_record_body_parts(
+    record_id: str,
+    request: UpdateBodyPartsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    record = db.query(HealthRecord).filter(
+        HealthRecord.id == record_id,
+        HealthRecord.user_id == current_user.id,
+        HealthRecord.is_deleted == False
+    ).first()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    
+    # Update body parts (store as JSON)
+    record.body_parts = json.dumps(request.body_parts) if request.body_parts else None
+    record.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Body parts updated successfully", "body_parts": request.body_parts}
 
 @router.patch("/{record_id}/categories")
 async def update_record_categories(
