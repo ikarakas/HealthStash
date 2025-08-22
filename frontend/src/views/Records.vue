@@ -343,7 +343,9 @@ const totalPages = computed(() => {
 const fetchRecords = async () => {
   loading.value = true
   try {
-    const params = {}
+    const params = {
+      limit: 1000  // Fetch up to 1000 records to ensure we get all for client-side pagination
+    }
     if (filters.value.category) params.category = filters.value.category
     if (filters.value.search) params.search = filters.value.search
     

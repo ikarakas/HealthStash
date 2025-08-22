@@ -6,7 +6,6 @@ import secrets
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://healthstash:changeme@postgres:5432/healthstash"
     TIMESCALE_URL: str = "postgresql://healthstash:changeme@timescaledb:5432/healthstash_vitals"
-    REDIS_URL: str = "redis://:changeme@redis:6379/0"
     
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"

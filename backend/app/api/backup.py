@@ -8,8 +8,10 @@ import gzip
 import tarfile
 import io
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.user import User
 from app.models.backup import BackupHistory, BackupType, BackupStatus
 from app.api.auth import get_admin_user
@@ -32,6 +34,9 @@ async def create_backup(
     db.add(backup)
     db.commit()
     
+    # Store backup ID to ensure we can update it even after interruption
+    backup_id = backup.id
+    
     try:
         # Create backup directory if it doesn't exist
         backup_dir = "/backups"
@@ -41,23 +46,39 @@ async def create_backup(
         sql_file = f"{backup_dir}/backup_{timestamp}.sql"
         
         try:
+            # Parse database URL to get credentials
+            db_url = urlparse(settings.DATABASE_URL)
+            db_password = db_url.password or "changeme-strong-password"
+            db_user = db_url.username or "healthstash"
+            db_name = db_url.path.lstrip('/') or "healthstash"
+            
             # Try to create actual database backup
             dump_cmd = [
                 "pg_dump",
                 "-h", "postgres",
-                "-U", "healthstash",
-                "-d", "healthstash",
+                "-U", db_user,
+                "-d", db_name,
                 "-f", sql_file
             ]
             
             # Set PGPASSWORD environment variable
             env = os.environ.copy()
-            env["PGPASSWORD"] = "healthstash"
+            env["PGPASSWORD"] = db_password
             
             result = subprocess.run(dump_cmd, env=env, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
-                backup.file_path = sql_file
+                # Compress the SQL file
+                import gzip
+                gz_file = f"{sql_file}.gz"
+                with open(sql_file, 'rb') as f_in:
+                    with gzip.open(gz_file, 'wb') as f_out:
+                        f_out.writelines(f_in)
+                
+                # Remove uncompressed file
+                os.remove(sql_file)
+                
+                backup.file_path = gz_file
                 backup.notes = "Database backup completed successfully"
             else:
                 # If pg_dump fails, create a placeholder SQL file
@@ -110,14 +131,28 @@ CREATE TABLE IF NOT EXISTS placeholder (id INT);
             duration = (completed - started).total_seconds()
             backup.duration_seconds = int(duration)
         
-        # Set a placeholder size (in production, calculate actual file size)
-        backup.size_mb = 50  # Placeholder value
+        # Calculate actual file size
+        if backup.file_path and os.path.exists(backup.file_path):
+            file_size_bytes = os.path.getsize(backup.file_path)
+            backup.size_mb = round(file_size_bytes / (1024 * 1024), 2)  # Convert to MB
+        else:
+            backup.size_mb = 0
     
     except Exception as e:
         backup.status = BackupStatus.FAILED
         backup.error_message = str(e)
     
-    db.commit()
+    # Ensure we always commit the final status
+    try:
+        db.commit()
+    except:
+        # If commit fails, try to refresh and commit again
+        db.rollback()
+        backup = db.query(BackupHistory).filter(BackupHistory.id == backup_id).first()
+        if backup and backup.status == BackupStatus.IN_PROGRESS:
+            backup.status = BackupStatus.FAILED
+            backup.error_message = "Backup interrupted"
+            db.commit()
     
     if backup.status == BackupStatus.FAILED:
         raise HTTPException(status_code=500, detail=f"Backup failed: {backup.error_message}")
@@ -154,9 +189,9 @@ async def restore_backup(
         raise HTTPException(status_code=400, detail="Backup file path not found")
     
     try:
-        # Execute restore script
+        # Execute safe restore script
         result = subprocess.run(
-            ["/backup/restore.sh", backup.file_path],
+            ["/backup/restore_safe.sh", backup.file_path],
             capture_output=True,
             text=True,
             timeout=600
@@ -226,15 +261,39 @@ async def download_backup(
         else:
             raise HTTPException(status_code=404, detail="Backup file path not set")
     
-    # SQL files are our standard backup format
-    file_ext = os.path.splitext(backup.file_path)[1]
-    media_type = "application/sql" if file_ext == '.sql' else "application/octet-stream"
-    filename = f"backup_{backup_id}_{backup.created_at.strftime('%Y%m%d')}.sql"
+    # Determine file type and appropriate mime type
+    filename = os.path.basename(backup.file_path)
+    file_ext = os.path.splitext(filename)[1].lower()
+    
+    # Set appropriate media type based on file extension
+    if file_ext == '.sql':
+        media_type = "application/sql"
+    elif file_ext == '.gz':
+        media_type = "application/gzip"
+        # Check if it's a tar.gz
+        if filename.endswith('.tar.gz'):
+            media_type = "application/x-tar+gzip"
+    elif file_ext == '.enc':
+        media_type = "application/octet-stream"
+    else:
+        media_type = "application/octet-stream"
+    
+    # Use the original filename for download, or generate based on actual file type
+    if filename:
+        download_filename = filename
+    else:
+        # Generate filename based on actual file extension
+        if file_ext == '.gz':
+            download_filename = f"backup_{backup_id}_{backup.created_at.strftime('%Y%m%d')}.sql.gz"
+        elif file_ext == '.sql':
+            download_filename = f"backup_{backup_id}_{backup.created_at.strftime('%Y%m%d')}.sql"
+        else:
+            download_filename = f"backup_{backup_id}_{backup.created_at.strftime('%Y%m%d')}.backup"
     
     # Return the file for download
     return FileResponse(
         path=backup.file_path,
-        filename=filename,
+        filename=download_filename,
         media_type=media_type
     )
 

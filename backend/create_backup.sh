@@ -9,7 +9,7 @@ BACKUP_NAME="backup_${TIMESTAMP}"
 mkdir -p ${BACKUP_DIR}
 
 # Dump PostgreSQL database
-PGPASSWORD=${POSTGRES_PASSWORD:-healthstash} pg_dump \
+PGPASSWORD=${POSTGRES_PASSWORD:-changeme-strong-password} pg_dump \
     -h postgres \
     -U ${POSTGRES_USER:-healthstash} \
     -d ${POSTGRES_DB:-healthstash} \

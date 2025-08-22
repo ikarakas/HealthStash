@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, Enum, Text, Boolean
+from sqlalchemy import Column, String, DateTime, Integer, Float, Enum, Text, Boolean
 from datetime import datetime, timezone
 import enum
 
@@ -24,7 +24,7 @@ class BackupHistory(Base):
     
     file_path = Column(String, nullable=True)
     file_size = Column(Integer, nullable=True)
-    size_mb = Column(Integer, nullable=True)  # Size in MB for display
+    size_mb = Column(Float, nullable=True)  # Size in MB for display
     checksum = Column(String, nullable=True)
     duration_seconds = Column(Integer, nullable=True)  # Duration in seconds
     

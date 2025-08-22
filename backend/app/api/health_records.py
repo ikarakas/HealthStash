@@ -33,7 +33,7 @@ async def list_records(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     search: Optional[str] = None,
-    limit: int = Query(default=50, le=100),
+    limit: int = Query(default=50, le=1000),
     offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -77,12 +77,12 @@ async def list_records(
             "file_size": record.file_size,
             "provider_name": record.provider_name,
             "location": record.location,
-            "body_parts": json.loads(record.body_parts) if record.body_parts else [],
+            "body_parts": record.body_parts.split(',') if record.body_parts and record.body_parts.strip() else [],
             "service_date": record.service_date.isoformat() if record.service_date else None,
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
             "is_deleted": record.is_deleted,
-            "categories": json.loads(record.categories) if record.categories else [record.category.value if record.category else None],
+            "categories": record.categories.split(',') if record.categories and record.categories.strip() else [record.category.value if record.category else None],
             "has_thumbnail": record.has_thumbnail if hasattr(record, 'has_thumbnail') else False
         })
     

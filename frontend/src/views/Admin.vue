@@ -312,7 +312,9 @@ const formatDuration = (seconds) => {
 const getLastBackupTime = () => {
   const completed = backups.value.filter(b => b.status === 'completed')
   if (completed.length === 0) return 'Never'
-  const lastBackup = new Date(completed[0].created_at)
+  // Append 'Z' to indicate UTC if not already present
+  const dateStr = completed[0].created_at
+  const lastBackup = new Date(dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z')
   const now = new Date()
   const diffMs = now - lastBackup
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))

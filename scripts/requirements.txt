@@ -1,0 +1,6 @@
+faker
+pillow
+pypdf2
+reportlab
+psycopg2-binary
+minio

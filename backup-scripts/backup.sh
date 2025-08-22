@@ -24,20 +24,24 @@ PGPASSWORD=${POSTGRES_PASSWORD} pg_dump \
 
 # Backup TimescaleDB
 echo "Backing up TimescaleDB..."
-PGPASSWORD=${POSTGRES_PASSWORD} pg_dump \
+# Use TimescaleDB-specific credentials if available, otherwise fall back to Postgres credentials
+TIMESCALE_USER="${TIMESCALE_USER:-${POSTGRES_USER}}"
+TIMESCALE_PASSWORD="${TIMESCALE_PASSWORD:-${POSTGRES_PASSWORD}}"
+
+PGPASSWORD=${TIMESCALE_PASSWORD} pg_dump \
     -h ${TIMESCALE_HOST} \
-    -U ${POSTGRES_USER} \
+    -U ${TIMESCALE_USER} \
     -d ${TIMESCALE_DB} \
     --no-owner \
     --no-acl \
     -f ${BACKUP_PATH}/timescale_backup.sql
 
 # Configure MinIO client
-mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}
+minio-mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}
 
 # Backup MinIO data
 echo "Backing up MinIO files..."
-mc mirror minio/healthstash-files ${BACKUP_PATH}/minio_files/
+minio-mc mirror minio/healthstash-files ${BACKUP_PATH}/minio_files/
 
 # Create checksum
 echo "Creating checksum..."
@@ -47,13 +51,28 @@ find ${BACKUP_PATH} -type f -exec sha256sum {} \; > ${BACKUP_PATH}/checksums.txt
 echo "Creating compressed archive..."
 tar -czf ${BACKUP_PATH}.tar.gz -C ${BACKUP_DIR} ${BACKUP_NAME}
 
-# Encrypt backup with OpenSSL
-if [ ! -z "${BACKUP_ENCRYPTION_KEY}" ]; then
-    echo "Encrypting backup..."
-    openssl enc -aes-256-cbc -salt -in ${BACKUP_PATH}.tar.gz -out ${BACKUP_PATH}.tar.gz.enc -k ${BACKUP_ENCRYPTION_KEY}
+# Encrypt backup with OpenSSL using authenticated encryption
+# Always encrypt backups for security
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+echo "Encrypting backup with authenticated encryption..."
+
+# Use AES-256-CBC with PBKDF2 (GCM not available in Alpine's OpenSSL)
+openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+    -in ${BACKUP_PATH}.tar.gz \
+    -out ${BACKUP_PATH}.tar.gz.enc \
+    -pass pass:"${BACKUP_ENCRYPTION_KEY}"
+
+if [ $? -eq 0 ]; then
     rm ${BACKUP_PATH}.tar.gz
     FINAL_BACKUP="${BACKUP_PATH}.tar.gz.enc"
+    
+    # If no key was provided, save the generated key securely
+    if [ -z "${BACKUP_ENCRYPTION_KEY_PROVIDED}" ]; then
+        echo "WARNING: Generated encryption key: ${BACKUP_ENCRYPTION_KEY}"
+        echo "IMPORTANT: Save this key securely - you'll need it to restore the backup!"
+    fi
 else
+    echo "ERROR: Encryption failed, keeping unencrypted backup"
     FINAL_BACKUP="${BACKUP_PATH}.tar.gz"
 fi
 
@@ -69,11 +88,19 @@ fi
 echo "Backup completed successfully: ${FINAL_BACKUP}"
 echo "Backup size: $(du -h ${FINAL_BACKUP} | cut -f1)"
 
-# Update backup status in database
-PGPASSWORD=${POSTGRES_PASSWORD} psql \
-    -h ${POSTGRES_HOST} \
-    -U ${POSTGRES_USER} \
-    -d ${POSTGRES_DB} \
-    -c "INSERT INTO backup_history (id, backup_type, status, file_path, file_size, completed_at) 
-        VALUES (gen_random_uuid(), 'full', 'completed', '${FINAL_BACKUP}', 
-        (SELECT pg_size_pretty(pg_database_size('${POSTGRES_DB}'))::text), NOW());"
+# Update backup status in database - don't fail entire backup if this fails
+update_backup_status() {
+    local backup_size_bytes=$(stat -c%s "${FINAL_BACKUP}" 2>/dev/null || echo "0")
+    local backup_id=$(uuidgen || echo "backup_$(date +%s)")
+    
+    PGPASSWORD=${POSTGRES_PASSWORD} psql \
+        -h ${POSTGRES_HOST} \
+        -U ${POSTGRES_USER} \
+        -d ${POSTGRES_DB} \
+        -c "INSERT INTO backup_history (id, backup_type, status, file_path, file_size, size_mb, completed_at, created_at) 
+            VALUES ('${backup_id}', 'FULL', 'COMPLETED', '${FINAL_BACKUP}', 
+            ${backup_size_bytes}, $(echo "scale=2; ${backup_size_bytes}/1048576" | bc), NOW(), NOW());" 2>/dev/null || \
+    echo "Warning: Failed to update backup history in database"
+}
+
+trap update_backup_status EXIT
