@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Integer, Enum, Text, Boolean
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from app.core.database import Base
@@ -24,7 +24,9 @@ class BackupHistory(Base):
     
     file_path = Column(String, nullable=True)
     file_size = Column(Integer, nullable=True)
+    size_mb = Column(Integer, nullable=True)  # Size in MB for display
     checksum = Column(String, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)  # Duration in seconds
     
     includes_database = Column(Boolean, default=True)
     includes_files = Column(Boolean, default=True)
@@ -35,4 +37,4 @@ class BackupHistory(Base):
     
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

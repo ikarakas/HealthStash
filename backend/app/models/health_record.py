@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float, Enum, Table, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from app.core.database import Base
@@ -53,8 +53,8 @@ class HealthRecord(Base):
     is_deleted = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     
     user = relationship("User", back_populates="health_records")
     tags = relationship("RecordTag", secondary=record_tags, back_populates="records")
@@ -65,6 +65,6 @@ class RecordTag(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
     color = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     records = relationship("HealthRecord", secondary=record_tags, back_populates="tags")

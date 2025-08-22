@@ -5,7 +5,7 @@ from typing import List
 import uuid
 import os
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -211,7 +211,7 @@ async def delete_file(
     
     # Soft delete record
     record.is_deleted = True
-    record.deleted_at = datetime.utcnow()
+    record.deleted_at = datetime.now(timezone.utc)
     
     # Add audit log
     audit = AuditLog(

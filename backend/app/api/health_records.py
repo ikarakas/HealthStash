@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import json
 import logging
@@ -99,7 +99,7 @@ async def get_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    start_date = datetime.utcnow() - timedelta(days=months * 30)
+    start_date = datetime.now(timezone.utc) - timedelta(days=months * 30)
     
     records = db.query(HealthRecord).filter(
         HealthRecord.user_id == current_user.id,
@@ -183,7 +183,7 @@ async def update_record_title(
     
     # Update title
     record.title = request.title.strip()
-    record.updated_at = datetime.utcnow()
+    record.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {"message": "Title updated successfully", "title": record.title}
@@ -206,7 +206,7 @@ async def update_record_location(
     
     # Update location (can be empty)
     record.location = request.location.strip() if request.location else None
-    record.updated_at = datetime.utcnow()
+    record.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {"message": "Location updated successfully", "location": record.location}
@@ -229,7 +229,7 @@ async def update_record_body_parts(
     
     # Update body parts (store as JSON)
     record.body_parts = json.dumps(request.body_parts) if request.body_parts else None
-    record.updated_at = datetime.utcnow()
+    record.updated_at = datetime.now(timezone.utc)
     db.commit()
     
     return {"message": "Body parts updated successfully", "body_parts": request.body_parts}

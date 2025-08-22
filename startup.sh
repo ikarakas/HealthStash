@@ -39,12 +39,24 @@ echo "Creating directories..."
 mkdir -p nginx/ssl
 mkdir -p backups
 
+# Determine Docker Compose command (v2 preferred)
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE_PRINT="docker compose"
+    compose() { docker compose "$@"; }
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_PRINT="docker-compose"
+    compose() { docker-compose "$@"; }
+else
+    echo "Error: Docker Compose is not installed. Install Docker Desktop (includes Compose v2) or docker-compose v1."
+    exit 1
+fi
+
 # Build and start containers
 echo "Building Docker images..."
-docker-compose build
+compose build
 
 echo "Starting services..."
-docker-compose up -d
+compose up -d
 
 # Wait for services to be ready
 echo "Waiting for services to be ready..."
@@ -52,7 +64,7 @@ sleep 10
 
 # Check health
 echo "Checking service health..."
-docker-compose ps
+compose ps
 
 echo ""
 echo "HealthStash is starting up!"
@@ -65,8 +77,8 @@ echo "Default admin account:"
 echo "  The first user to register becomes the admin"
 echo ""
 echo "To view logs:"
-echo "  docker-compose logs -f [service_name]"
+echo "  $COMPOSE_PRINT logs -f [service_name]"
 echo ""
 echo "To stop the application:"
-echo "  docker-compose down"
+echo "  $COMPOSE_PRINT down"
 echo ""

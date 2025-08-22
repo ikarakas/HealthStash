@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from app.core.database import get_db
@@ -40,7 +40,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     
-    if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
+    if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Account is locked")
     
     return user
@@ -132,7 +132,7 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
+    if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Account locked until {user.locked_until}",
@@ -140,11 +140,11 @@ async def login(
     
     if not verify_password(form_data.password, user.hashed_password):
         user.failed_login_attempts += 1
-        user.last_failed_login = datetime.utcnow()
+        user.last_failed_login = datetime.now(timezone.utc)
         
         if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
             user.is_locked = True
-            user.locked_until = datetime.utcnow() + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
         
         audit_log = AuditLog(
             id=str(uuid.uuid4()),
@@ -166,7 +166,7 @@ async def login(
     user.last_failed_login = None
     user.is_locked = False
     user.locked_until = None
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     
     audit_log = AuditLog(
         id=str(uuid.uuid4()),
@@ -238,7 +238,7 @@ async def change_password(
     
     current_user.hashed_password = get_password_hash(password_data.new_password)
     current_user.encryption_salt = salt
-    current_user.password_changed_at = datetime.utcnow()
+    current_user.password_changed_at = datetime.now(timezone.utc)
     
     audit_log = AuditLog(
         id=str(uuid.uuid4()),

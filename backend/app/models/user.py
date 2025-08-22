@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, Enum, LargeBinary
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from app.core.database import Base
@@ -29,10 +29,10 @@ class User(Base):
     last_failed_login = Column(DateTime, nullable=True)
     locked_until = Column(DateTime, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     last_login = Column(DateTime, nullable=True)
-    password_changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    password_changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     health_records = relationship("HealthRecord", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")

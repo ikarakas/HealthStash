@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 # VitalSign uses a separate base since it's in TimescaleDB
@@ -39,7 +39,7 @@ class VitalSign(TimescaleBase):
     source = Column(String, nullable=True)
     
     recorded_at = Column(DateTime, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     # Note: relationship to User is not needed since VitalSign is in TimescaleDB
     # and User is in PostgreSQL - they are in different databases

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from app.core.database import get_db
@@ -88,7 +88,7 @@ async def reset_user_password(
     
     user.hashed_password = get_password_hash(new_password)
     user.encryption_salt = salt
-    user.password_changed_at = datetime.utcnow()
+    user.password_changed_at = datetime.now(timezone.utc)
     user.failed_login_attempts = 0
     user.is_locked = False
     user.locked_until = None
@@ -133,8 +133,8 @@ async def get_system_stats(
     }
     
     # Activity statistics
-    last_24h = datetime.utcnow() - timedelta(hours=24)
-    last_7d = datetime.utcnow() - timedelta(days=7)
+    last_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    last_7d = datetime.now(timezone.utc) - timedelta(days=7)
     
     stats["activity"] = {
         "logins_24h": db.query(AuditLog).filter(
@@ -186,7 +186,7 @@ async def cleanup_deleted_records(
     admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
-    cutoff_date = datetime.utcnow() - timedelta(days=days_old)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
     
     # Permanently delete soft-deleted records older than cutoff
     from app.models.health_record import HealthRecord

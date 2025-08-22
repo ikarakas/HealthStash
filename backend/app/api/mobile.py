@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import uuid
 import secrets
 import socket
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.models.user import User
@@ -25,17 +25,17 @@ async def generate_upload_token(
 ):
     """Generate a temporary token for mobile upload"""
     token = secrets.token_urlsafe(8)[:8].upper()  # 8 character token
-    expires_at = datetime.utcnow() + timedelta(minutes=15)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     
     # Store token with user ID and expiry
     upload_tokens[token] = {
         "user_id": current_user.id,
         "expires_at": expires_at,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     
     # Clean up expired tokens
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired = [k for k, v in upload_tokens.items() if v["expires_at"] < now]
     for k in expired:
         del upload_tokens[k]
@@ -106,7 +106,7 @@ async def verify_upload_token(request: VerifyTokenRequest):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     token_data = upload_tokens[token]
-    if datetime.utcnow() > token_data["expires_at"]:
+    if datetime.now(timezone.utc) > token_data["expires_at"]:
         del upload_tokens[token]
         raise HTTPException(status_code=401, detail="Token expired")
     
@@ -126,7 +126,7 @@ async def mobile_upload_file(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     token_data = upload_tokens[token]
-    if datetime.utcnow() > token_data["expires_at"]:
+    if datetime.now(timezone.utc) > token_data["expires_at"]:
         del upload_tokens[token]
         raise HTTPException(status_code=401, detail="Token expired")
     
@@ -163,7 +163,7 @@ async def mobile_upload_file(
     mobile_uploads.insert(0, {
         "id": result.get("id"),
         "name": file.filename,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "device": device,
         "user_id": user.id
     })

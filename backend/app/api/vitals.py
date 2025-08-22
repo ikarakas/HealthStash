@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 import uuid
 import json
@@ -29,7 +29,7 @@ async def add_vital_sign(
 ):
     try:
         vital_id = str(uuid.uuid4())
-        recorded_time = vital_data.recorded_at or datetime.utcnow()
+        recorded_time = vital_data.recorded_at or datetime.now(timezone.utc)
         
         # Use raw SQL for TimescaleDB
         query = text("""
@@ -79,7 +79,7 @@ async def list_vital_signs(
         else:
             # Default to last 30 days
             conditions.append("recorded_at >= :start_date")
-            params["start_date"] = datetime.utcnow() - timedelta(days=30)
+            params["start_date"] = datetime.now(timezone.utc) - timedelta(days=30)
         
         if end_date:
             conditions.append("recorded_at <= :end_date")
@@ -162,13 +162,13 @@ async def get_vital_trends(
 ):
     try:
         if period == "week":
-            start_date = datetime.utcnow() - timedelta(days=7)
+            start_date = datetime.now(timezone.utc) - timedelta(days=7)
         elif period == "month":
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         elif period == "year":
-            start_date = datetime.utcnow() - timedelta(days=365)
+            start_date = datetime.now(timezone.utc) - timedelta(days=365)
         else:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         
         query = text("""
             SELECT recorded_at, value, unit
