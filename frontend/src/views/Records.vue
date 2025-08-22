@@ -1,6 +1,11 @@
 <template>
   <div class="records">
-    <h1>Health Records</h1>
+    <div class="header-with-action">
+      <h1>Health Records</h1>
+      <button @click="showCreateDialog = true" class="create-record-btn">
+        ➕ Create New Record
+      </button>
+    </div>
     
     <div class="filters">
       <select v-model="filters.category" @change="fetchRecords">
@@ -280,6 +285,75 @@
         </div>
       </div>
     </div>
+    
+    <!-- Create Record Dialog -->
+    <div v-if="showCreateDialog" class="modal-overlay" @click.self="showCreateDialog = false">
+      <div class="modal-content create-record-modal">
+        <div class="modal-header">
+          <h2>Create New Health Record</h2>
+          <button @click="showCreateDialog = false" class="close-modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="createRecord" class="create-record-form">
+            <div class="form-group">
+              <label>Title *</label>
+              <input v-model="newRecord.title" type="text" required placeholder="Enter record title">
+            </div>
+            
+            <div class="form-group">
+              <label>Category *</label>
+              <select v-model="newRecord.category" required>
+                <option value="">Select a category</option>
+                <option value="lab_results">Lab Results</option>
+                <option value="imaging">Imaging</option>
+                <option value="clinical_notes">Clinical Notes</option>
+                <option value="prescriptions">Prescriptions</option>
+                <option value="vaccinations">Vaccinations</option>
+                <option value="personal_notes">Personal Notes</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Description</label>
+              <textarea v-model="newRecord.description" rows="3" placeholder="Enter description"></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label>Provider Name</label>
+              <input v-model="newRecord.provider_name" type="text" placeholder="e.g., Dr. Smith">
+            </div>
+            
+            <div class="form-group">
+              <label>Location</label>
+              <input v-model="newRecord.location" type="text" placeholder="e.g., Hospital, Clinic, Home">
+            </div>
+            
+            <div class="form-group">
+              <label>Service Date</label>
+              <input v-model="newRecord.service_date" type="date">
+            </div>
+            
+            <div class="form-group">
+              <label>File (optional)</label>
+              <input @change="handleFileSelect" type="file" accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx">
+              <small v-if="selectedFile">Selected: {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})</small>
+            </div>
+            
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea v-model="newRecord.content_text" rows="4" placeholder="Additional notes or content"></textarea>
+            </div>
+            
+            <div class="form-actions">
+              <button type="submit" class="primary-btn" :disabled="creatingRecord">
+                {{ creatingRecord ? 'Creating...' : '✅ Create Record' }}
+              </button>
+              <button type="button" @click="showCreateDialog = false" class="cancel-btn">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -296,6 +370,28 @@ const itemsPerPage = ref(20)
 const showBodyDiagram = ref(false)
 const currentBodyRecord = ref(null)
 const tempBodyParts = ref([])
+const showCreateDialog = ref(false)
+const creatingRecord = ref(false)
+const selectedFile = ref(null)
+
+// Helper to get today's date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const newRecord = ref({
+  title: '',
+  category: 'other',  // Default to 'other' category
+  description: '',
+  provider_name: '',
+  location: '',
+  service_date: getTodayDate(),
+  content_text: ''
+})
 
 const filters = ref({
   category: '',
@@ -694,6 +790,67 @@ const saveBodyParts = async () => {
 const formatBodyParts = (parts) => {
   if (!parts || parts.length === 0) return 'None specified'
   return parts.map(part => part.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ')
+}
+
+// Create record functions
+const handleFileSelect = (event) => {
+  selectedFile.value = event.target.files[0]
+}
+
+const createRecord = async () => {
+  creatingRecord.value = true
+  try {
+    // First create the record
+    const recordData = {
+      title: newRecord.value.title,
+      category: newRecord.value.category,
+      description: newRecord.value.description || '',
+      provider_name: newRecord.value.provider_name || '',
+      location: newRecord.value.location || '',
+      service_date: newRecord.value.service_date ? `${newRecord.value.service_date}T00:00:00` : null,
+      content_text: newRecord.value.content_text || ''
+    }
+    
+    const response = await api.post('/records', recordData)
+    const createdRecord = response.data
+    
+    // If there's a file, upload it
+    if (selectedFile.value) {
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+      formData.append('record_id', createdRecord.id)
+      
+      await api.post('/files/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+    }
+    
+    // Reset form and close dialog
+    newRecord.value = {
+      title: '',
+      category: 'other',  // Default to 'other' category
+      description: '',
+      provider_name: '',
+      location: '',
+      service_date: getTodayDate(),
+      content_text: ''
+    }
+    selectedFile.value = null
+    showCreateDialog.value = false
+    
+    // Refresh records list
+    await fetchRecords()
+    
+    // Show success message (you could add a toast notification here)
+    alert('Record created successfully!')
+  } catch (error) {
+    console.error('Failed to create record:', error)
+    alert('Failed to create record. Please try again.')
+  } finally {
+    creatingRecord.value = false
+  }
 }
 
 onMounted(() => {
@@ -1722,5 +1879,124 @@ tr:hover .edit-title-btn-compact {
 
 .compact-btn.delete:hover {
   background: #fee2e2;
+}
+
+/* Create Record Styles */
+.header-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header-with-action h1 {
+  margin: 0;
+}
+
+.create-record-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-size: 1rem;
+}
+
+.create-record-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.create-record-modal {
+  max-width: 600px;
+}
+
+.create-record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="file"],
+.form-group select,
+.form-group textarea {
+  padding: 0.625rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group small {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.primary-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primary-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  padding: 0.75rem 1.5rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
 }
 </style>

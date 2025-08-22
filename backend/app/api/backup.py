@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import subprocess
@@ -7,8 +7,10 @@ import os
 import gzip
 import tarfile
 import io
+import asyncio
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+import logging
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -16,10 +18,149 @@ from app.models.user import User
 from app.models.backup import BackupHistory, BackupType, BackupStatus
 from app.api.auth import get_admin_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+async def perform_backup_async(backup_id: str, backup_type: BackupType):
+    """Perform backup asynchronously with proper error handling"""
+    from app.core.database import SessionLocal
+    
+    db = SessionLocal()
+    try:
+        backup = db.query(BackupHistory).filter(BackupHistory.id == backup_id).first()
+        if not backup:
+            logger.error(f"Backup {backup_id} not found")
+            return
+        
+        try:
+            # Create backup directory if it doesn't exist
+            backup_dir = "/backups"
+            os.makedirs(backup_dir, exist_ok=True)
+            
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            sql_file = f"{backup_dir}/backup_{timestamp}.sql"
+            
+            try:
+                # Parse database URL to get credentials
+                db_url = urlparse(settings.DATABASE_URL)
+                db_password = db_url.password or "changeme-strong-password"
+                db_user = db_url.username or "healthstash"
+                db_name = db_url.path.lstrip('/') or "healthstash"
+                
+                # Try to create actual database backup
+                dump_cmd = [
+                    "pg_dump",
+                    "-h", "postgres",
+                    "-U", db_user,
+                    "-d", db_name,
+                    "-f", sql_file
+                ]
+                
+                # Set PGPASSWORD environment variable
+                env = os.environ.copy()
+                env["PGPASSWORD"] = db_password
+                
+                # Run with timeout
+                process = await asyncio.create_subprocess_exec(
+                    *dump_cmd,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), 
+                        timeout=240  # 4 minute timeout
+                    )
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    raise Exception("Backup process timed out after 4 minutes")
+                
+                if process.returncode == 0:
+                    # Compress the SQL file
+                    gz_file = f"{sql_file}.gz"
+                    with open(sql_file, 'rb') as f_in:
+                        with gzip.open(gz_file, 'wb') as f_out:
+                            f_out.writelines(f_in)
+                    
+                    # Remove uncompressed file
+                    os.remove(sql_file)
+                    
+                    backup.file_path = gz_file
+                    backup.notes = "Database backup completed successfully"
+                else:
+                    # If pg_dump fails, create a placeholder SQL file
+                    sql_content = f"""-- Placeholder backup file
+-- Created at {timestamp}
+-- Actual backup failed - pg_dump not available in container
+-- Database: healthstash
+-- This is a placeholder file
+
+CREATE TABLE IF NOT EXISTS placeholder (id INT);
+"""
+                    with open(sql_file, 'w') as f:
+                        f.write(sql_content)
+                    
+                    backup.file_path = sql_file
+                    backup.notes = f"Backup created (placeholder - install postgresql-client for real backups)"
+                    
+            except Exception as e:
+                # Fallback: create a simple placeholder SQL file
+                sql_content = f"""-- Placeholder backup file
+-- Created at {timestamp}
+-- Error: {str(e)}
+-- Database: healthstash
+
+CREATE TABLE IF NOT EXISTS placeholder (id INT);
+"""
+                with open(sql_file, 'w') as f:
+                    f.write(sql_content)
+                
+                backup.file_path = sql_file
+                backup.notes = f"Backup created (placeholder): {str(e)}"
+            
+            backup.status = BackupStatus.COMPLETED
+            backup.completed_at = datetime.now(timezone.utc)
+            
+            # Calculate duration if both timestamps exist
+            if backup.started_at and backup.completed_at:
+                started = backup.started_at
+                completed = backup.completed_at
+                
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                if completed.tzinfo is None:
+                    completed = completed.replace(tzinfo=timezone.utc)
+                    
+                duration = (completed - started).total_seconds()
+                backup.duration_seconds = int(duration)
+            
+            # Calculate actual file size
+            if backup.file_path and os.path.exists(backup.file_path):
+                file_size_bytes = os.path.getsize(backup.file_path)
+                backup.size_mb = round(file_size_bytes / (1024 * 1024), 2)
+            else:
+                backup.size_mb = 0
+        
+        except Exception as e:
+            logger.error(f"Backup {backup_id} failed: {e}")
+            backup.status = BackupStatus.FAILED
+            backup.error_message = str(e)
+            backup.completed_at = datetime.now(timezone.utc)
+        
+        db.commit()
+        logger.info(f"Backup {backup_id} completed with status: {backup.status}")
+        
+    except Exception as e:
+        logger.error(f"Error processing backup {backup_id}: {e}")
+    finally:
+        db.close()
 
 @router.post("/create")
 async def create_backup(
+    background_tasks: BackgroundTasks,
     backup_type: BackupType = BackupType.FULL,
     admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
@@ -34,130 +175,13 @@ async def create_backup(
     db.add(backup)
     db.commit()
     
-    # Store backup ID to ensure we can update it even after interruption
+    # Store backup ID
     backup_id = backup.id
     
-    try:
-        # Create backup directory if it doesn't exist
-        backup_dir = "/backups"
-        os.makedirs(backup_dir, exist_ok=True)
-        
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        sql_file = f"{backup_dir}/backup_{timestamp}.sql"
-        
-        try:
-            # Parse database URL to get credentials
-            db_url = urlparse(settings.DATABASE_URL)
-            db_password = db_url.password or "changeme-strong-password"
-            db_user = db_url.username or "healthstash"
-            db_name = db_url.path.lstrip('/') or "healthstash"
-            
-            # Try to create actual database backup
-            dump_cmd = [
-                "pg_dump",
-                "-h", "postgres",
-                "-U", db_user,
-                "-d", db_name,
-                "-f", sql_file
-            ]
-            
-            # Set PGPASSWORD environment variable
-            env = os.environ.copy()
-            env["PGPASSWORD"] = db_password
-            
-            result = subprocess.run(dump_cmd, env=env, capture_output=True, text=True, timeout=30)
-            
-            if result.returncode == 0:
-                # Compress the SQL file
-                import gzip
-                gz_file = f"{sql_file}.gz"
-                with open(sql_file, 'rb') as f_in:
-                    with gzip.open(gz_file, 'wb') as f_out:
-                        f_out.writelines(f_in)
-                
-                # Remove uncompressed file
-                os.remove(sql_file)
-                
-                backup.file_path = gz_file
-                backup.notes = "Database backup completed successfully"
-            else:
-                # If pg_dump fails, create a placeholder SQL file
-                sql_content = f"""-- Placeholder backup file
--- Created at {timestamp}
--- Actual backup failed - pg_dump not available in container
--- Database: healthstash
--- This is a placeholder file
-
-CREATE TABLE IF NOT EXISTS placeholder (id INT);
-"""
-                with open(sql_file, 'w') as f:
-                    f.write(sql_content)
-                
-                backup.file_path = sql_file
-                backup.notes = f"Backup created (placeholder - install postgresql-client for real backups)"
-                
-        except Exception as e:
-            # Fallback: create a simple placeholder SQL file
-            sql_content = f"""-- Placeholder backup file
--- Created at {timestamp}
--- Error: {str(e)}
--- Database: healthstash
-
-CREATE TABLE IF NOT EXISTS placeholder (id INT);
-"""
-            with open(sql_file, 'w') as f:
-                f.write(sql_content)
-            
-            backup.file_path = sql_file
-            backup.notes = f"Backup created (placeholder): {str(e)}"
-        
-        backup.status = BackupStatus.COMPLETED
-        backup.completed_at = datetime.now(timezone.utc)
-        
-        # Calculate duration if both timestamps exist
-        if backup.started_at and backup.completed_at:
-            # Ensure both timestamps are timezone-aware
-            started = backup.started_at
-            completed = backup.completed_at
-            
-            # If started_at is naive, make it UTC-aware
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            
-            # If completed_at is naive, make it UTC-aware  
-            if completed.tzinfo is None:
-                completed = completed.replace(tzinfo=timezone.utc)
-                
-            duration = (completed - started).total_seconds()
-            backup.duration_seconds = int(duration)
-        
-        # Calculate actual file size
-        if backup.file_path and os.path.exists(backup.file_path):
-            file_size_bytes = os.path.getsize(backup.file_path)
-            backup.size_mb = round(file_size_bytes / (1024 * 1024), 2)  # Convert to MB
-        else:
-            backup.size_mb = 0
+    # Run backup in background
+    background_tasks.add_task(perform_backup_async, backup_id, backup_type)
     
-    except Exception as e:
-        backup.status = BackupStatus.FAILED
-        backup.error_message = str(e)
-    
-    # Ensure we always commit the final status
-    try:
-        db.commit()
-    except:
-        # If commit fails, try to refresh and commit again
-        db.rollback()
-        backup = db.query(BackupHistory).filter(BackupHistory.id == backup_id).first()
-        if backup and backup.status == BackupStatus.IN_PROGRESS:
-            backup.status = BackupStatus.FAILED
-            backup.error_message = "Backup interrupted"
-            db.commit()
-    
-    if backup.status == BackupStatus.FAILED:
-        raise HTTPException(status_code=500, detail=f"Backup failed: {backup.error_message}")
-    
-    return {"message": "Backup created successfully", "backup_id": str(backup.id)}
+    return {"message": "Backup started", "backup_id": str(backup_id)}
 
 @router.get("/history")
 async def get_backup_history(

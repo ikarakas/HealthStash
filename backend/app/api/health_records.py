@@ -27,6 +27,63 @@ class UpdateLocationRequest(BaseModel):
 class UpdateBodyPartsRequest(BaseModel):
     body_parts: List[str]
 
+class CreateRecordRequest(BaseModel):
+    title: str
+    category: str  # Changed to str to accept string values
+    description: Optional[str] = ""
+    provider_name: Optional[str] = ""
+    location: Optional[str] = ""
+    service_date: Optional[datetime] = None
+    content_text: Optional[str] = ""
+
+@router.post("/")
+async def create_record(
+    record_data: CreateRecordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    import uuid
+    
+    logger.info(f"Creating record with data: {record_data.dict()}")
+    
+    # Convert string category to enum
+    try:
+        category_enum = RecordCategory(record_data.category)
+    except ValueError as e:
+        logger.warning(f"Invalid category '{record_data.category}', using OTHER. Error: {e}")
+        # Fallback to OTHER if invalid category
+        category_enum = RecordCategory.OTHER
+    
+    # Create new health record
+    new_record = HealthRecord(
+        id=str(uuid.uuid4()),
+        user_id=current_user.id,
+        title=record_data.title,
+        category=category_enum,
+        description=record_data.description or "",
+        provider_name=record_data.provider_name or "",
+        location=record_data.location or "",
+        service_date=record_data.service_date,
+        content_text=record_data.content_text or "",
+        is_deleted=False
+    )
+    
+    db.add(new_record)
+    db.commit()
+    db.refresh(new_record)
+    
+    return {
+        "id": new_record.id,
+        "title": new_record.title,
+        "category": new_record.category.value if new_record.category else None,
+        "description": new_record.description,
+        "provider_name": new_record.provider_name,
+        "location": new_record.location,
+        "service_date": new_record.service_date.isoformat() if new_record.service_date else None,
+        "content_text": new_record.content_text,
+        "created_at": new_record.created_at.isoformat() if new_record.created_at else None
+    }
+
 @router.get("/")
 async def list_records(
     category: Optional[RecordCategory] = None,

@@ -42,6 +42,7 @@ redis_data/
 minio_data/
 backup_data/
 nginx_logs/
+docker-nat-lab/
 
 # Backup files
 *.bak

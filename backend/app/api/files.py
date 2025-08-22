@@ -154,11 +154,28 @@ async def download_file(
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
     
+    # Check if file has MinIO object name
+    if not record.minio_object_name:
+        raise HTTPException(status_code=404, detail="No file associated with this record")
+    
     # Get file from MinIO
-    encrypted_content = await storage_service.download_file(record.minio_object_name)
+    try:
+        encrypted_content = await storage_service.download_file(record.minio_object_name)
+    except Exception as e:
+        print(f"Error downloading from MinIO: {e}")
+        encrypted_content = None
     
     if not encrypted_content:
-        raise HTTPException(status_code=404, detail="File content not found")
+        # For sample data or missing files, return a placeholder
+        placeholder_content = f"File: {record.file_name}\nNote: Original file not available in storage.\nThis may be sample data or the file may have been removed.".encode()
+        
+        return StreamingResponse(
+            io.BytesIO(placeholder_content),
+            media_type='text/plain',
+            headers={
+                "Content-Disposition": f'attachment; filename="{record.file_name}.txt"'
+            }
+        )
     
     # Generate user encryption key
     user_key = derive_key_from_password(
