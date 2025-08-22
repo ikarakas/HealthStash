@@ -56,7 +56,7 @@ const userDisplay = computed(() => {
   return 'Guest'
 })
 
-const version = ref('1.0.0')
+const version = ref('0.0.2')
 const startTime = ref(Date.now())
 const uptime = ref('0m')
 

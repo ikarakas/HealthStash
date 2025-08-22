@@ -409,16 +409,29 @@ const activeFilters = computed(() => {
 
 const sortedRecords = computed(() => {
   const sorted = [...records.value]
-  const [field, order] = filters.value.sortBy.split('_')
+  // Split on last underscore to properly handle field names with underscores
+  const lastUnderscore = filters.value.sortBy.lastIndexOf('_')
+  const field = filters.value.sortBy.substring(0, lastUnderscore)
+  const order = filters.value.sortBy.substring(lastUnderscore + 1)
   
   sorted.sort((a, b) => {
-    let aVal = field === 'title' ? a.title : (a[field] || '')
-    let bVal = field === 'title' ? b.title : (b[field] || '')
+    let aVal = a[field]
+    let bVal = b[field]
+    
+    // Handle different field types
+    if (field === 'title') {
+      aVal = (aVal || '').toLowerCase()
+      bVal = (bVal || '').toLowerCase()
+    } else if (field === 'created_at' || field === 'service_date') {
+      // For dates, use Date comparison
+      aVal = aVal ? new Date(aVal).getTime() : 0
+      bVal = bVal ? new Date(bVal).getTime() : 0
+    }
     
     if (order === 'desc') {
-      return aVal > bVal ? -1 : 1
+      return bVal - aVal
     } else {
-      return aVal < bVal ? -1 : 1
+      return aVal - bVal
     }
   })
   

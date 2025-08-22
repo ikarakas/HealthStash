@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HealthStash",
     description="Privacy-first personal health data vault",
-    version="1.0.0",
+    version="0.0.2",
     lifespan=lifespan
 )
 
@@ -145,4 +145,4 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "HealthStash API", "version": "1.0.0"}
+    return {"message": "HealthStash API", "version": "0.0.2"}
