@@ -12,6 +12,10 @@ from app.models.audit_log import AuditLog, AuditAction
 from app.api.auth import get_admin_user
 from app.schemas.auth import UserCreate, UserResponse
 from app.core.config import settings
+from pydantic import BaseModel
+
+class PasswordResetRequest(BaseModel):
+    new_password: str
 
 router = APIRouter()
 
@@ -75,7 +79,7 @@ async def create_user(
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(
     user_id: str,
-    new_password: str,
+    password_data: PasswordResetRequest,
     admin_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -84,9 +88,9 @@ async def reset_user_password(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Generate new encryption key with new password
-    encryption_key, salt = generate_user_encryption_key(user_id, new_password)
+    encryption_key, salt = generate_user_encryption_key(user_id, password_data.new_password)
     
-    user.hashed_password = get_password_hash(new_password)
+    user.hashed_password = get_password_hash(password_data.new_password)
     user.encryption_salt = salt
     user.password_changed_at = datetime.now(timezone.utc)
     user.failed_login_attempts = 0

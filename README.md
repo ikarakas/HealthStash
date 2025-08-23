@@ -249,15 +249,34 @@ npm run dev
 
 ### Running Tests
 
-```bash
-# Backend tests
-cd backend
-pytest
+All tests are organized in the `tests/` directory.
 
-# Frontend tests
-cd frontend
-npm run test
+```bash
+# Quick test runner from root
+./test.sh integration    # Run integration tests
+./test.sh security       # Run security tests
+./test.sh all           # Run all tests
+
+# Or use the test suite directly
+cd tests
+./run-all-tests.sh      # Run integration tests (default)
+./run-tests.sh --all    # Run comprehensive test suite
+
+# Specific test types
+python tests/comprehensive_test.py      # System integration test
+python tests/test_user_isolation.py     # Security isolation test
+
+# Backend tests
+cd backend && pytest tests/
+
+# Frontend tests  
+cd frontend && npm test
+
+# End-to-end tests
+npx playwright test --config=tests/playwright.config.js
 ```
+
+See `tests/README.md` for detailed testing documentation.
 
 ## Troubleshooting
 
