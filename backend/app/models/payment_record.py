@@ -1,3 +1,9 @@
+"""
+HealthStash - Payment Records Module
+Copyright (c) 2025 Ilker M. KARAKAS
+Licensed under the MIT License
+"""
+
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float, Enum, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone

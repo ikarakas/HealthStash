@@ -1,6 +1,9 @@
 {
   "name": "healthstash-frontend",
   "version": "0.0.4",
+  "description": "HealthStash - Privacy-First Personal Health Data Vault Frontend",
+  "author": "Ilker M. KARAKAS",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "vite",

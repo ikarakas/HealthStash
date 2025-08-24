@@ -1,3 +1,9 @@
+"""
+HealthStash - Payment Management API
+Copyright (c) 2025 Ilker M. KARAKAS
+Licensed under the MIT License
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Union

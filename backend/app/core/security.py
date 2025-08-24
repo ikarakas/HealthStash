@@ -1,3 +1,7 @@
+# MIT License
+# Copyright (c) 2025 Ilker M. KARAKAS
+# HealthStash - Privacy-First Personal Health Data Vault
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union
 from jose import JWTError, jwt

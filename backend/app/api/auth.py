@@ -1,3 +1,7 @@
+# MIT License
+# Copyright (c) 2025 Ilker M. KARAKAS
+# HealthStash - Privacy-First Personal Health Data Vault
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session

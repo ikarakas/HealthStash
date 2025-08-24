@@ -1,3 +1,9 @@
+<!--
+  HealthStash - Main Application Component
+  Copyright (c) 2025 Ilker M. KARAKAS
+  Licensed under the MIT License
+-->
+
 <template>
   <div id="app">
     <header v-if="isAuthenticated" class="app-header">

@@ -1,3 +1,9 @@
+<!--
+  HealthStash - Payment Vault Component
+  Copyright (c) 2025 Ilker M. KARAKAS
+  Licensed under the MIT License
+-->
+
 <template>
   <div class="payment-vault">
     <div class="header-with-action">

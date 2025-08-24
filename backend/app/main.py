@@ -1,3 +1,13 @@
+"""
+HealthStash - Privacy-First Personal Health Data Vault
+Copyright (c) 2025 Ilker M. KARAKAS
+Licensed under the MIT License
+
+Author: Ilker M. KARAKAS
+Email: [Your email if you want to add it]
+Version: 0.0.4
+"""
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

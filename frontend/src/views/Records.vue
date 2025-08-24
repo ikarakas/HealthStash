@@ -1,3 +1,8 @@
+<!--
+  MIT License
+  Copyright (c) 2025 Ilker M. KARAKAS
+  HealthStash - Privacy-First Personal Health Data Vault
+-->
 <template>
   <div class="records">
     <div class="header-with-action">
