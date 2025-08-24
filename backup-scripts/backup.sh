@@ -43,9 +43,11 @@ minio-mc alias set minio http://${MINIO_ENDPOINT} ${MINIO_ACCESS_KEY} ${MINIO_SE
 echo "Backing up MinIO files..."
 minio-mc mirror minio/healthstash-files ${BACKUP_PATH}/minio_files/
 
-# Create checksum
+# Create checksum with relative paths
 echo "Creating checksum..."
-find ${BACKUP_PATH} -type f -exec sha256sum {} \; > ${BACKUP_PATH}/checksums.txt
+cd ${BACKUP_PATH}
+find . -type f -exec sha256sum {} \; > checksums.txt
+cd -
 
 # Create compressed archive
 echo "Creating compressed archive..."

@@ -463,12 +463,20 @@ const getLastBackupTime = () => {
   const lastBackup = new Date(dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z')
   const now = new Date()
   const diffMs = now - lastBackup
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  if (diffHours < 1) return 'Just now'
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  
+  if (diffMinutes < 5) return 'Just now'
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`
+  if (diffHours === 1) return '1 hour ago'
+  if (diffHours < 24) return `${diffHours} hours ago`
   if (diffDays === 1) return 'Yesterday'
-  return `${diffDays} days ago`
+  if (diffDays < 7) return `${diffDays} days ago`
+  if (diffDays < 14) return 'Last week'
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+  if (diffDays < 60) return 'Last month'
+  return `${Math.floor(diffDays / 30)} months ago`
 }
 
 const retryBackup = async (backupId) => {
