@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import auth, users, files, health_records, vitals, admin, backup, mobile
+from app.api import auth, users, files, health_records, vitals, admin, backup, mobile, payments
 from app.core.security import verify_encryption_setup
 
 logging.basicConfig(level=logging.INFO)
@@ -138,6 +138,7 @@ app.include_router(vitals.router, prefix="/api/vitals", tags=["Vital Signs"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(mobile.router, prefix="/api/mobile", tags=["Mobile Upload"])
+app.include_router(payments.router, prefix="/api/payments", tags=["Payments"])
 
 @app.get("/health")
 async def health_check():

@@ -35,4 +35,5 @@ class User(Base):
     password_changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     health_records = relationship("HealthRecord", back_populates="user", cascade="all, delete-orphan")
+    payment_records = relationship("PaymentRecord", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")

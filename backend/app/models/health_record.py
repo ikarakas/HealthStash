@@ -58,6 +58,7 @@ class HealthRecord(Base):
     
     user = relationship("User", back_populates="health_records")
     tags = relationship("RecordTag", secondary=record_tags, back_populates="records")
+    payment_records = relationship("PaymentRecord", back_populates="health_record")
 
 class RecordTag(Base):
     __tablename__ = "tags"

@@ -33,6 +33,8 @@
               <th>Email</th>
               <th>Role</th>
               <th>Storage</th>
+              <th>Created</th>
+              <th>Last Updated</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -42,6 +44,8 @@
               <td>{{ user.email }}</td>
               <td>{{ user.role }}</td>
               <td>{{ formatStorage(user.storage_used_mb) }} / {{ formatStorage(user.storage_quota_mb) }}</td>
+              <td>{{ formatDate(user.created_at) }}</td>
+              <td>{{ formatDate(user.updated_at) }}</td>
               <td>
                 <button @click="resetPassword(user.id)">Reset Password</button>
                 <button @click="deleteUser(user.id)" class="danger">Delete</button>

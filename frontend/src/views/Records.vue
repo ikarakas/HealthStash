@@ -247,6 +247,7 @@
             
             <div class="actions">
               <button @click="downloadRecord(record.id)" class="primary">⬇️ Download</button>
+              <button @click="viewPayments(record.id)" class="secondary">💰 Payments</button>
               <button @click="deleteRecord(record.id)" class="danger">🗑️ Delete</button>
             </div>
           </div>
@@ -359,9 +360,11 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../services/axios'
 import HumanBodyDiagram from '../components/HumanBodyDiagram.vue'
 
+const router = useRouter()
 const records = ref([])
 const loading = ref(false)
 const viewMode = ref('list')
@@ -531,6 +534,11 @@ const downloadRecord = async (recordId) => {
     console.error('Failed to download:', error)
     alert('Failed to download file')
   }
+}
+
+const viewPayments = (recordId) => {
+  // Navigate to payments view with health record filter
+  router.push(`/payments?health_record_id=${recordId}`)
 }
 
 const deleteRecord = async (recordId) => {

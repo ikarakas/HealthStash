@@ -37,6 +37,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/payments',
+    name: 'PaymentVault',
+    component: () => import('@/views/PaymentVault.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/upload',
     name: 'Upload',
     component: () => import('@/views/Upload.vue'),
