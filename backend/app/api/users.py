@@ -44,6 +44,7 @@ async def list_users(
             "storage_quota_mb": user.storage_quota_mb,
             "storage_used_mb": user.storage_used_mb,
             "created_at": user.created_at,
+            "updated_at": user.updated_at,  # Added this field
             "last_login": user.last_login
         }
         for user in users

@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import auth, users, files, health_records, vitals, admin, backup, mobile, payments
+from app.api import auth, users, files, health_records, vitals, admin, backup_v2 as backup, mobile, payments
 from app.core.security import verify_encryption_setup
 
 logging.basicConfig(level=logging.INFO)

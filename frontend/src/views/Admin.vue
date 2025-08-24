@@ -47,6 +47,22 @@
               <td>{{ formatDate(user.created_at) }}</td>
               <td>{{ formatDate(user.updated_at) }}</td>
               <td>
+                <button 
+                  v-if="user.role !== 'admin'" 
+                  @click="updateUserRole(user.id, 'admin')" 
+                  class="promote"
+                  title="Promote to Admin"
+                >
+                  👑 Make Admin
+                </button>
+                <button 
+                  v-else-if="user.role === 'admin' && user.id !== currentUserId" 
+                  @click="updateUserRole(user.id, 'user')" 
+                  class="demote"
+                  title="Remove Admin Rights"
+                >
+                  👤 Make User
+                </button>
                 <button @click="resetPassword(user.id)">Reset Password</button>
                 <button @click="deleteUser(user.id)" class="danger">Delete</button>
               </td>
@@ -98,6 +114,7 @@
         <div v-if="backups.length > 0" class="backup-list">
           <div class="backup-list-header">
             <span>Date & Time</span>
+            <span>Type</span>
             <span>Status</span>
             <span>Size</span>
             <span>Duration</span>
@@ -107,6 +124,11 @@
             <div class="backup-date">
               <div class="date-primary">{{ formatBackupDate(backup.created_at) }}</div>
               <div class="date-secondary">{{ formatBackupTime(backup.created_at) }}</div>
+            </div>
+            <div class="backup-type">
+              <span class="type-badge" :class="backup.source === 'automatic' ? 'type-auto' : 'type-manual'">
+                {{ backup.source === 'automatic' ? '🤖 Auto' : '👤 Manual' }}
+              </span>
             </div>
             <div class="backup-status">
               <span class="status-badge" :class="`badge-${backup.status}`">
@@ -154,9 +176,56 @@
           <input v-model="newUser.email" type="email" placeholder="Email" required />
           <input v-model="newUser.username" type="text" placeholder="Username" required />
           <input v-model="newUser.full_name" type="text" placeholder="Full Name" required />
-          <input v-model="newUser.password" type="password" placeholder="Password" required />
-          <button type="submit">Create User</button>
-          <button type="button" @click="showCreateUser = false">Cancel</button>
+          
+          <div class="password-field">
+            <div class="password-input-wrapper">
+              <input 
+                v-model="newUser.password" 
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="Password" 
+                required
+                @input="checkPasswordStrength(newUser.password)"
+              />
+              <button type="button" class="password-toggle" @click="togglePasswordVisibility">
+                {{ showPassword ? '👁️' : '👁️‍🗨️' }}
+              </button>
+            </div>
+            
+            <div class="password-actions">
+              <button type="button" class="generate-btn" @click="generatePassword">
+                🔐 Generate Strong Password
+              </button>
+              <button 
+                v-if="newUser.password" 
+                type="button" 
+                class="copy-btn"
+                @click="copyPassword"
+              >
+                {{ copiedPassword ? '✓ Copied!' : '📋 Copy' }}
+              </button>
+            </div>
+            
+            <div v-if="passwordStrength" class="password-strength">
+              <span class="strength-label">Strength:</span>
+              <span :class="['strength-indicator', `strength-${passwordStrength}`]">
+                {{ passwordStrength.charAt(0).toUpperCase() + passwordStrength.slice(1) }}
+              </span>
+            </div>
+            
+            <div class="password-requirements">
+              <small>Requirements:</small>
+              <ul>
+                <li :class="{ met: newUser.password.length >= 12 }">At least 12 characters</li>
+                <li :class="{ met: /[A-Z]/.test(newUser.password) }">One uppercase letter</li>
+                <li :class="{ met: /[a-z]/.test(newUser.password) }">One lowercase letter</li>
+                <li :class="{ met: /[0-9]/.test(newUser.password) }">One number</li>
+                <li :class="{ met: /[^A-Za-z0-9]/.test(newUser.password) }">One special character</li>
+              </ul>
+            </div>
+          </div>
+          
+          <button type="submit" class="create-user-btn">Create User</button>
+          <button type="button" class="cancel-btn" @click="showCreateUser = false">Cancel</button>
         </form>
       </div>
     </div>
@@ -164,13 +233,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import api from '../services/axios'
+import { useAuthStore } from '@/stores/auth'
 
+const authStore = useAuthStore()
 const stats = ref({})
 const users = ref([])
 const backups = ref([])
 const showCreateUser = ref(false)
+const backupSystemStatus = ref(null)
+
+// Get current user ID from auth store
+const currentUserId = computed(() => authStore.user?.id)
 
 const newUser = ref({
   email: '',
@@ -178,6 +253,10 @@ const newUser = ref({
   full_name: '',
   password: ''
 })
+
+const showPassword = ref(false)
+const passwordStrength = ref('')
+const copiedPassword = ref(false)
 
 const fetchStats = async () => {
   try {
@@ -207,15 +286,52 @@ const fetchBackups = async () => {
 }
 
 const handleCreateUser = async () => {
+  // Validate all fields are filled
+  if (!newUser.value.email || !newUser.value.username || 
+      !newUser.value.full_name || !newUser.value.password) {
+    alert('Please fill in all fields')
+    return
+  }
+  
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(newUser.value.email)) {
+    alert('Please enter a valid email address')
+    return
+  }
+  
+  // Validate password strength
+  if (newUser.value.password.length < 12) {
+    alert('Password must be at least 12 characters long')
+    return
+  }
+  
   try {
-    const response = await api.post('/admin/users', newUser.value)
+    await api.post('/admin/users', newUser.value)
     showCreateUser.value = false
     newUser.value = { email: '', username: '', full_name: '', password: '' }
+    passwordStrength.value = ''
+    showPassword.value = false
     await fetchUsers()
     alert('User created successfully')
   } catch (error) {
     console.error('Failed to create user:', error)
-    const errorMessage = error.response?.data?.detail || 'Failed to create user'
+    let errorMessage = 'Failed to create user'
+    
+    if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.status === 400) {
+      errorMessage = 'User with this email or username already exists'
+    } else if (error.response?.status === 401) {
+      errorMessage = 'You are not authorized to create users'
+    } else if (error.response?.status === 403) {
+      errorMessage = 'Admin privileges required'
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
     alert(`Error: ${errorMessage}`)
   }
 }
@@ -243,11 +359,30 @@ const deleteUser = async (userId) => {
   }
 }
 
+const updateUserRole = async (userId, newRole) => {
+  const action = newRole === 'admin' ? 'promote to admin' : 'demote to regular user'
+  if (!confirm(`Are you sure you want to ${action} this user?`)) return
+  
+  try {
+    await api.put(`/admin/users/${userId}/role`, { role: newRole })
+    await fetchUsers()
+    alert(`User role updated to ${newRole}`)
+  } catch (error) {
+    console.error('Failed to update user role:', error)
+    const errorMessage = error.response?.data?.detail || 'Failed to update user role'
+    alert(`Error: ${errorMessage}`)
+  }
+}
+
 const createBackup = async () => {
   try {
     const response = await api.post('/backup/create')
-    alert(response.data.message || 'Backup initiated successfully')
-    await fetchBackups()
+    const message = response.data.message || 'Backup initiated successfully'
+    const details = response.data.includes ? `\nIncludes: ${response.data.includes.join(', ')}` : ''
+    alert(message + details)
+    
+    // Refresh backup list after a short delay to show the new backup
+    setTimeout(() => fetchBackups(), 2000)
   } catch (error) {
     console.error('Failed to create backup:', error)
     const errorMessage = error.response?.data?.detail || 'Failed to create backup'
@@ -272,7 +407,14 @@ const formatStorage = (mb) => {
 }
 
 const formatDate = (date) => {
-  return new Date(date).toLocaleString()
+  if (!date) return '—'
+  try {
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleString()
+  } catch (error) {
+    return '—'
+  }
 }
 
 const formatBackupDate = (date) => {
@@ -368,10 +510,81 @@ const deleteBackup = async (backupId) => {
   }
 }
 
+const generatePassword = () => {
+  const length = 16
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz'
+  const numbers = '0123456789'
+  const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+  
+  const allChars = uppercase + lowercase + numbers + symbols
+  let password = ''
+  
+  password += uppercase.charAt(Math.floor(Math.random() * uppercase.length))
+  password += lowercase.charAt(Math.floor(Math.random() * lowercase.length))
+  password += numbers.charAt(Math.floor(Math.random() * numbers.length))
+  password += symbols.charAt(Math.floor(Math.random() * symbols.length))
+  
+  for (let i = 4; i < length; i++) {
+    password += allChars.charAt(Math.floor(Math.random() * allChars.length))
+  }
+  
+  password = password.split('').sort(() => Math.random() - 0.5).join('')
+  
+  newUser.value.password = password
+  checkPasswordStrength(password)
+}
+
+const checkPasswordStrength = (password) => {
+  if (!password) {
+    passwordStrength.value = ''
+    return
+  }
+  
+  let strength = 0
+  
+  if (password.length >= 12) strength++
+  if (password.length >= 16) strength++
+  if (/[a-z]/.test(password)) strength++
+  if (/[A-Z]/.test(password)) strength++
+  if (/[0-9]/.test(password)) strength++
+  if (/[^A-Za-z0-9]/.test(password)) strength++
+  
+  if (strength <= 2) passwordStrength.value = 'weak'
+  else if (strength <= 4) passwordStrength.value = 'medium'
+  else passwordStrength.value = 'strong'
+}
+
+const copyPassword = async () => {
+  try {
+    await navigator.clipboard.writeText(newUser.value.password)
+    copiedPassword.value = true
+    setTimeout(() => {
+      copiedPassword.value = false
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to copy password:', error)
+  }
+}
+
+const togglePasswordVisibility = () => {
+  showPassword.value = !showPassword.value
+}
+
+const fetchBackupStatus = async () => {
+  try {
+    const response = await api.get('/backup/status')
+    backupSystemStatus.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch backup status:', error)
+  }
+}
+
 onMounted(() => {
   fetchStats()
   fetchUsers()
   fetchBackups()
+  fetchBackupStatus()
 })
 </script>
 
@@ -453,6 +666,27 @@ button {
 
 button.danger {
   background: #e74c3c;
+}
+
+button.promote {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+  color: #333;
+  font-weight: 600;
+}
+
+button.promote:hover {
+  background: linear-gradient(135deg, #ffcc00 0%, #ff9f00 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+button.demote {
+  background: #6c757d;
+  color: white;
+}
+
+button.demote:hover {
+  background: #5a6268;
 }
 
 .modal {
@@ -594,7 +828,7 @@ button.danger {
 
 .backup-list-header {
   display: grid;
-  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr;
+  grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr 1.5fr;
   gap: 1rem;
   padding: 1rem 1.25rem;
   background: #f1f5f9;
@@ -606,7 +840,7 @@ button.danger {
 
 .backup-item {
   display: grid;
-  grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr;
+  grid-template-columns: 2fr 1fr 1.2fr 1fr 1fr 1.5fr;
   gap: 1rem;
   padding: 1.25rem;
   background: white;
@@ -797,5 +1031,218 @@ button.danger {
 .empty-state span {
   font-size: 0.875rem;
   color: #94a3b8;
+}
+
+/* Enhanced Password Field Styles */
+.password-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  padding-right: 2.5rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  font-size: 1.2rem;
+  margin: 0;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.password-toggle:hover {
+  opacity: 1;
+}
+
+.password-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.generate-btn,
+.copy-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 0;
+}
+
+.generate-btn:hover {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.copy-btn:hover {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.password-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.strength-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.strength-indicator {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.strength-weak {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.strength-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.strength-strong {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.password-requirements {
+  background: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.password-requirements small {
+  display: block;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.password-requirements ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.password-requirements li {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.password-requirements li::before {
+  content: '✗';
+  position: absolute;
+  left: 0;
+  color: #ef4444;
+}
+
+.password-requirements li.met {
+  color: #059669;
+}
+
+.password-requirements li.met::before {
+  content: '✓';
+  color: #059669;
+}
+
+.create-user-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 0.5rem;
+}
+
+.create-user-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.cancel-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 0;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Backup Type Badge Styles */
+.backup-type {
+  display: flex;
+  align-items: center;
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.type-auto {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+}
+
+.type-manual {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 </style>

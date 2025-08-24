@@ -17,6 +17,9 @@ from pydantic import BaseModel
 class PasswordResetRequest(BaseModel):
     new_password: str
 
+class RoleUpdateRequest(BaseModel):
+    role: str
+
 router = APIRouter()
 
 @router.post("/users", response_model=UserResponse)
@@ -93,6 +96,7 @@ async def reset_user_password(
     user.hashed_password = get_password_hash(password_data.new_password)
     user.encryption_salt = salt
     user.password_changed_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc)  # Explicitly set updated_at
     user.failed_login_attempts = 0
     user.is_locked = False
     user.locked_until = None
@@ -110,6 +114,44 @@ async def reset_user_password(
     db.commit()
     
     return {"message": "Password reset successfully"}
+
+@router.put("/users/{user_id}/role")
+async def update_user_role(
+    user_id: str,
+    role_data: RoleUpdateRequest,
+    admin_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate role
+    if role_data.role not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin' or 'user'")
+    
+    # Prevent admin from removing their own admin role
+    if user_id == admin_user.id and role_data.role != "admin":
+        raise HTTPException(status_code=400, detail="Cannot remove your own admin privileges")
+    
+    # Update role
+    old_role = user.role.value
+    user.role = UserRole.ADMIN if role_data.role == "admin" else UserRole.USER
+    user.updated_at = datetime.now(timezone.utc)  # Explicitly set updated_at
+    
+    # Add audit log
+    audit = AuditLog(
+        id=str(uuid.uuid4()),
+        user_id=admin_user.id,
+        action=AuditAction.USER_UPDATE,
+        resource_type="user",
+        resource_id=user_id,
+        details=f"Changed role for {user.username} from {old_role} to {role_data.role}"
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {"message": f"User role updated to {role_data.role}"}
 
 @router.get("/stats")
 async def get_system_stats(
