@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import logging
 import asyncio
+import time
 from datetime import datetime, timezone, timedelta
 
 from app.core.config import settings
@@ -24,6 +25,9 @@ from app.core.security import verify_encryption_setup
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Track server start time
+SERVER_START_TIME = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -152,7 +156,13 @@ app.include_router(payments.router, prefix="/api/payments", tags=["Payments"])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "HealthStash"}
+    uptime_seconds = int(time.time() - SERVER_START_TIME)
+    return {
+        "status": "healthy", 
+        "service": "HealthStash",
+        "uptime_seconds": uptime_seconds,
+        "start_time": SERVER_START_TIME
+    }
 
 @app.get("/")
 async def root():

@@ -64,29 +64,37 @@ const userDisplay = computed(() => {
 })
 
 const version = ref('0.0.5')
-const startTime = ref(Date.now())
 const uptime = ref('0m')
+
+// Fetch server uptime
+const fetchUptime = async () => {
+  try {
+    const response = await fetch('/health')
+    if (response.ok) {
+      const data = await response.json()
+      const uptimeSeconds = data.uptime_seconds || 0
+      
+      const days = Math.floor(uptimeSeconds / 86400)
+      const hours = Math.floor((uptimeSeconds % 86400) / 3600)
+      const minutes = Math.floor((uptimeSeconds % 3600) / 60)
+      
+      if (days > 0) {
+        uptime.value = `${days}d ${hours}h`
+      } else if (hours > 0) {
+        uptime.value = `${hours}h ${minutes}m`
+      } else {
+        uptime.value = `${minutes}m`
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch uptime:', error)
+  }
+}
 
 // Update uptime every minute
 onMounted(() => {
-  const updateUptime = () => {
-    const now = Date.now()
-    const diff = Math.floor((now - startTime.value) / 1000)
-    const days = Math.floor(diff / 86400)
-    const hours = Math.floor((diff % 86400) / 3600)
-    const minutes = Math.floor((diff % 3600) / 60)
-    
-    if (days > 0) {
-      uptime.value = `${days}d ${hours}h`
-    } else if (hours > 0) {
-      uptime.value = `${hours}h ${minutes}m`
-    } else {
-      uptime.value = `${minutes}m`
-    }
-  }
-  
-  updateUptime()
-  setInterval(updateUptime, 60000) // Update every minute
+  fetchUptime()
+  setInterval(fetchUptime, 60000) // Update every minute
 })
 
 const logout = async () => {

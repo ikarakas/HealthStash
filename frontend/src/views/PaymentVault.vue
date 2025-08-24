@@ -459,6 +459,12 @@ export default {
         
         if (showEditDialog.value) {
           await api.put(`/payments/${paymentForm.value.id}`, formData)
+          // Clear health_record_id filter if the linked record was changed
+          // This prevents the payment from disappearing after update
+          if (filters.value.health_record_id && 
+              paymentForm.value.health_record_id !== filters.value.health_record_id) {
+            filters.value.health_record_id = ''
+          }
         } else {
           await api.post('/payments', formData)
         }
