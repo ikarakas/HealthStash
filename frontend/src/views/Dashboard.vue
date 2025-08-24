@@ -70,13 +70,27 @@ const fetchStats = async () => {
     const response = await api.get('/records/stats')
     const data = response.data
     
+    // Fetch last backup info
+    let lastBackupDate = null
+    try {
+      const backupResponse = await api.get('/backup/history?limit=1')
+      if (backupResponse.data && backupResponse.data.length > 0) {
+        const lastBackup = backupResponse.data[0]
+        if (lastBackup.status === 'completed' && lastBackup.created_at) {
+          lastBackupDate = lastBackup.created_at
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch backup info:', error)
+    }
+    
     stats.value = {
       totalRecords: Object.values(data.categories).reduce((a, b) => a + b, 0),
       storageUsed: data.storage.used_mb,
       storageQuota: data.storage.quota_mb,
       storagePercentage: data.storage.percentage,
       recentUploads: data.recent_uploads.length,
-      lastBackup: new Date()
+      lastBackup: lastBackupDate
     }
   } catch (error) {
     console.error('Failed to fetch stats:', error)
@@ -92,7 +106,9 @@ const formatStorage = (mb) => {
 
 const formatDate = (date) => {
   if (!date) return 'Never'
-  return new Date(date).toLocaleDateString()
+  const d = new Date(date)
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString() + ' ' + 
+    Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
 onMounted(() => {

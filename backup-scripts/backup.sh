@@ -52,9 +52,13 @@ echo "Creating compressed archive..."
 tar -czf ${BACKUP_PATH}.tar.gz -C ${BACKUP_DIR} ${BACKUP_NAME}
 
 # Encrypt backup with OpenSSL using authenticated encryption
-# Always encrypt backups for security
-BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+# Use a FIXED key from environment or a default one that's always available
+BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-healthstash-backup-key-2025}"
 echo "Encrypting backup with authenticated encryption..."
+
+# Save the encryption key to a file for restore operations
+echo "${BACKUP_ENCRYPTION_KEY}" > ${BACKUP_DIR}/.encryption_key
+chmod 600 ${BACKUP_DIR}/.encryption_key
 
 # Use AES-256-CBC with PBKDF2 (GCM not available in Alpine's OpenSSL)
 openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
@@ -65,12 +69,7 @@ openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
 if [ $? -eq 0 ]; then
     rm ${BACKUP_PATH}.tar.gz
     FINAL_BACKUP="${BACKUP_PATH}.tar.gz.enc"
-    
-    # If no key was provided, save the generated key securely
-    if [ -z "${BACKUP_ENCRYPTION_KEY_PROVIDED}" ]; then
-        echo "WARNING: Generated encryption key: ${BACKUP_ENCRYPTION_KEY}"
-        echo "IMPORTANT: Save this key securely - you'll need it to restore the backup!"
-    fi
+    echo "Backup encrypted successfully with saved key"
 else
     echo "ERROR: Encryption failed, keeping unencrypted backup"
     FINAL_BACKUP="${BACKUP_PATH}.tar.gz"
@@ -88,8 +87,16 @@ fi
 echo "Backup completed successfully: ${FINAL_BACKUP}"
 echo "Backup size: $(du -h ${FINAL_BACKUP} | cut -f1)"
 
-# Update backup status in database - don't fail entire backup if this fails
+# For manual backups triggered via web UI, the database entry is already created
+# Only create a new entry for automatic/cron backups
 update_backup_status() {
+    # Check if this is a manual backup (triggered via web UI)
+    if [ ! -z "${BACKUP_ID}" ]; then
+        echo "Manual backup - database entry already exists"
+        return
+    fi
+    
+    # For automatic backups, create a database entry
     local backup_size_bytes=$(stat -c%s "${FINAL_BACKUP}" 2>/dev/null || echo "0")
     local backup_id=$(uuidgen || echo "backup_$(date +%s)")
     
@@ -97,9 +104,9 @@ update_backup_status() {
         -h ${POSTGRES_HOST} \
         -U ${POSTGRES_USER} \
         -d ${POSTGRES_DB} \
-        -c "INSERT INTO backup_history (id, backup_type, status, file_path, file_size, size_mb, completed_at, created_at) 
+        -c "INSERT INTO backup_history (id, backup_type, status, file_path, file_size, size_mb, completed_at, created_at, notes) 
             VALUES ('${backup_id}', 'FULL', 'COMPLETED', '${FINAL_BACKUP}', 
-            ${backup_size_bytes}, $(echo "scale=2; ${backup_size_bytes}/1048576" | bc), NOW(), NOW());" 2>/dev/null || \
+            ${backup_size_bytes}, $(echo "scale=2; ${backup_size_bytes}/1048576" | bc), NOW(), NOW(), 'Automatic backup (cron)');" 2>/dev/null || \
     echo "Warning: Failed to update backup history in database"
 }
 

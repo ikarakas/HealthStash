@@ -36,65 +36,88 @@ async def trigger_backup_container(backup_id: str, source: BackupSource):
             return
         
         try:
-            # Execute backup.sh in the backup container
-            cmd = ["docker", "compose", "exec", "-T", "backup", "/backup/backup.sh"]
+            # Create a trigger file for the backup container to detect
+            trigger_dir = "/backups/triggers"
+            os.makedirs(trigger_dir, exist_ok=True)
             
-            # Add environment variable to track the source
-            env = os.environ.copy()
-            env["BACKUP_SOURCE"] = source
-            env["BACKUP_ID"] = backup_id
+            trigger_file = f"{trigger_dir}/{backup_id}.trigger"
+            with open(trigger_file, 'w') as f:
+                f.write(f"BACKUP_ID={backup_id}\n")
+                f.write(f"BACKUP_TYPE=FULL\n")
+                f.write(f"BACKUP_SOURCE={source}\n")
+                f.write(f"TIMESTAMP={datetime.now(timezone.utc).isoformat()}\n")
             
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                env=env,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            logger.info(f"Created trigger file: {trigger_file}")
             
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=600  # 10 minute timeout
-            )
+            # Wait for backup to complete (check for completion file)
+            completion_file = f"{trigger_dir}/{backup_id}.complete"
+            max_wait = 600  # 10 minutes
+            wait_interval = 2  # Check every 2 seconds
+            elapsed = 0
             
-            if process.returncode == 0:
-                # Parse output to get the backup file path
-                output = stdout.decode('utf-8')
-                lines = output.split('\n')
+            while elapsed < max_wait:
+                if os.path.exists(completion_file):
+                    # Read completion status
+                    with open(completion_file, 'r') as f:
+                        status_data = f.read().strip()
+                    
+                    if "SUCCESS" in status_data:
+                        backup.status = BackupStatus.COMPLETED
+                        backup.notes = f"{source.value.capitalize()} backup completed (Full: PostgreSQL + TimescaleDB + MinIO + Encryption)"
+                        
+                        # Try to get backup file info
+                        info_file = f"{trigger_dir}/{backup_id}.info"
+                        if os.path.exists(info_file):
+                            with open(info_file, 'r') as f:
+                                for line in f:
+                                    if line.startswith("FILE="):
+                                        backup.file_path = line.split("=", 1)[1].strip()
+                                    elif line.startswith("SIZE_MB="):
+                                        try:
+                                            backup.size_mb = float(line.split("=", 1)[1].strip())
+                                        except:
+                                            pass
+                    else:
+                        backup.status = BackupStatus.FAILED
+                        backup.error_message = status_data
+                    
+                    # Clean up trigger files
+                    try:
+                        os.remove(completion_file)
+                        if os.path.exists(info_file):
+                            os.remove(info_file)
+                    except:
+                        pass
+                    
+                    break
                 
-                backup_file = None
-                backup_size = None
-                
-                for line in lines:
-                    if "Backup completed successfully:" in line:
-                        backup_file = line.split(":")[-1].strip()
-                    elif "Backup size:" in line:
-                        size_str = line.split(":")[-1].strip()
-                        # Convert size string (e.g., "1.2M", "500K") to MB
-                        if 'G' in size_str:
-                            backup_size = float(size_str.replace('G', '')) * 1024
-                        elif 'M' in size_str:
-                            backup_size = float(size_str.replace('M', ''))
-                        elif 'K' in size_str:
-                            backup_size = float(size_str.replace('K', '')) / 1024
-                        else:
-                            backup_size = 0
-                
-                backup.status = BackupStatus.COMPLETED
-                backup.completed_at = datetime.now(timezone.utc)
-                backup.file_path = backup_file if backup_file else f"/backups/healthstash_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz.enc"
-                backup.size_mb = backup_size if backup_size else 0
-                backup.notes = f"{source.value.capitalize()} backup completed successfully"
-                
-                # Calculate duration
-                if backup.started_at and backup.completed_at:
-                    duration = (backup.completed_at - backup.started_at).total_seconds()
-                    backup.duration_seconds = int(duration)
-            else:
-                error_msg = stderr.decode('utf-8') if stderr else "Unknown error"
+                await asyncio.sleep(wait_interval)
+                elapsed += wait_interval
+            
+            if elapsed >= max_wait:
                 backup.status = BackupStatus.FAILED
-                backup.error_message = f"Backup failed: {error_msg}"
-                backup.completed_at = datetime.now(timezone.utc)
-                logger.error(f"Backup {backup_id} failed: {error_msg}")
+                backup.error_message = "Backup timed out after 10 minutes"
+                # Clean up trigger file
+                try:
+                    os.remove(trigger_file)
+                except:
+                    pass
+            
+            backup.completed_at = datetime.now(timezone.utc)
+            
+            # Calculate duration
+            if backup.started_at and backup.completed_at:
+                started = backup.started_at
+                completed = backup.completed_at
+                
+                # Ensure both are timezone-aware
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                if completed.tzinfo is None:
+                    completed = completed.replace(tzinfo=timezone.utc)
+                
+                duration = (completed - started).total_seconds()
+                backup.duration_seconds = int(duration)
         
         except asyncio.TimeoutError:
             backup.status = BackupStatus.FAILED
