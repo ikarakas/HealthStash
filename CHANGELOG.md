@@ -2,6 +2,26 @@
 
 All notable changes to HealthStash will be documented in this file.
 
+## [0.0.5] - 2025-08-24
+
+### Added
+- **Comprehensive License and Copyright Information**
+  - MIT License headers added to all source files
+  - Copyright notices for Ilker M. KARAKAS (2025)
+  - AUTHORS file listing project contributors
+  - NOTICE file with third-party software attributions
+  - License badges in README.md
+
+### Changed
+- All source files now include proper copyright attribution
+- Configuration files include license headers
+- Documentation updated with author information
+
+### Technical
+- Standardized copyright format across Python and Vue files
+- Added version tracking in backend app module
+- Improved project metadata in package files
+
 ## [0.0.4] - 2025-08-24
 
 ### Added

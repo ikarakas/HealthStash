@@ -1,14 +1,14 @@
 # HealthStash - Personal Health Data Vault
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.0.4-blue.svg)](https://github.com/yourusername/healthstash/releases)
+[![Version](https://img.shields.io/badge/version-0.0.5-blue.svg)](https://github.com/yourusername/healthstash/releases)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://www.docker.com/)
 
 A self-hosted, privacy-first personal health data management system for families. HealthStash provides encrypted storage for medical records and health data without any external sharing capabilities.
 
 **Author:** Ilker M. KARAKAS  
 **License:** MIT License  
-**Latest Version:** 0.0.4
+**Latest Version:** 0.0.5
 
 ## Features
 
