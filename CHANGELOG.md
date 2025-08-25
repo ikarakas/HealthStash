@@ -2,6 +2,29 @@
 
 All notable changes to HealthStash will be documented in this file.
 
+## [0.0.6] - 2025-08-25
+
+### Fixed
+- Category filtering issues in Health Records page
+- Payment indicators not showing correctly on health records
+- Uptime display showing "0m" instead of actual server uptime
+- Backup system using random encryption keys making backups unrestorable
+- Data generation script using incorrect categories
+
+### Added
+- Comprehensive data wipe utility with verification (`make wipe-data`)
+- Missing "Other" category to filter dropdowns
+- Payment count indicators with visual styling
+
+### Changed
+- Removed confusing "Vital Signs" category from UI (kept in backend for compatibility)
+- Categories field now properly matches category enum values
+
+### Technical
+- Fixed foreign key constraint order in wipe script
+- Fixed nginx health endpoint proxy configuration
+- Improved error handling for missing TimescaleDB tables
+
 ## [0.0.5] - 2025-08-24
 
 ### Added

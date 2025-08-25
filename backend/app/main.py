@@ -5,7 +5,7 @@ Licensed under the MIT License
 
 Author: Ilker M. KARAKAS
 Email: [Your email if you want to add it]
-Version: 0.0.5
+Version: 0.0.6
 """
 
 from fastapi import FastAPI, Request
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HealthStash",
     description="Privacy-first personal health data vault",
-    version="0.0.5",
+    version="0.0.6",
     lifespan=lifespan
 )
 
@@ -166,4 +166,4 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "HealthStash API", "version": "0.0.5"}
+    return {"message": "HealthStash API", "version": "0.0.6"}
