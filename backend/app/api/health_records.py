@@ -9,6 +9,7 @@ import logging
 from app.core.database import get_db
 from app.models.user import User
 from app.models.health_record import HealthRecord, RecordCategory
+from app.models.payment_record import PaymentRecord
 from app.api.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,12 @@ async def list_records(
     # Serialize records to include dates properly
     serialized_records = []
     for record in records:
+        # Count associated payments
+        payment_count = db.query(PaymentRecord).filter(
+            PaymentRecord.health_record_id == record.id,
+            PaymentRecord.is_deleted == False
+        ).count()
+        
         serialized_records.append({
             "id": record.id,
             "title": record.title,
@@ -140,7 +147,8 @@ async def list_records(
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
             "is_deleted": record.is_deleted,
             "categories": record.categories.split(',') if record.categories and record.categories.strip() else [record.category.value if record.category else None],
-            "has_thumbnail": record.has_thumbnail if hasattr(record, 'has_thumbnail') else False
+            "has_thumbnail": record.has_thumbnail if hasattr(record, 'has_thumbnail') else False,
+            "payment_count": payment_count
         })
     
     return {

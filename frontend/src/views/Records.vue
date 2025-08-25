@@ -128,6 +128,9 @@
               <td>{{ formatFileSize(record.file_size) }}</td>
               <td class="actions-cell">
                 <button @click="downloadRecord(record.id)" class="compact-btn download" title="Download">⬇️</button>
+                <button @click="viewPayments(record.id)" class="compact-btn payments" :class="{ 'has-payments': record.payment_count > 0 }" :title="`${record.payment_count > 0 ? record.payment_count + ' payment(s)' : 'No payments'}`">
+                  {{ record.payment_count > 0 ? `💰${record.payment_count}` : '💰' }}
+                </button>
                 <button @click="deleteRecord(record.id)" class="compact-btn delete" title="Delete">🗑️</button>
               </td>
             </tr>
@@ -252,7 +255,9 @@
             
             <div class="actions">
               <button @click="downloadRecord(record.id)" class="primary">⬇️ Download</button>
-              <button @click="viewPayments(record.id)" class="secondary">💰 Payments</button>
+              <button @click="viewPayments(record.id)" class="secondary" :class="{ 'has-payments': record.payment_count > 0 }">
+                💰 {{ record.payment_count > 0 ? `Payments (${record.payment_count})` : 'Payments' }}
+              </button>
               <button @click="deleteRecord(record.id)" class="danger">🗑️ Delete</button>
             </div>
           </div>
@@ -1618,6 +1623,27 @@ tr:hover .edit-title-btn-compact {
   background: #dc2626;
 }
 
+.actions button.secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.actions button.secondary:hover {
+  background: #4b5563;
+}
+
+.actions button.secondary.has-payments {
+  background: #10b981;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.actions button.secondary.has-payments:hover {
+  background: #059669;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
 /* Pagination */
 .pagination {
   margin-top: 2rem;
@@ -1905,6 +1931,24 @@ tr:hover .edit-title-btn-compact {
 
 .compact-btn.delete:hover {
   background: #fee2e2;
+}
+
+.compact-btn.payments {
+  color: #6b7280;
+}
+
+.compact-btn.payments:hover {
+  background: #f3f4f6;
+}
+
+.compact-btn.payments.has-payments {
+  color: #10b981;
+  font-weight: bold;
+  background: #d1fae5;
+}
+
+.compact-btn.payments.has-payments:hover {
+  background: #a7f3d0;
 }
 
 /* Create Record Styles */
