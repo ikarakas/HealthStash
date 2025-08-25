@@ -30,6 +30,7 @@
         <div class="nav-links">
           <router-link to="/dashboard">🏠 Dashboard</router-link>
           <router-link to="/records">📁 Records</router-link>
+          <router-link to="/timeline">📅 Timeline</router-link>
           <router-link to="/vitals">💓 Vitals</router-link>
           <router-link to="/payments">💰 Payments</router-link>
           <router-link to="/upload">📤 Upload</router-link>

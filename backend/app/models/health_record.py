@@ -43,7 +43,7 @@ class HealthRecord(Base):
     has_thumbnail = Column(Boolean, default=False, nullable=False)
     
     provider_name = Column(String, nullable=True)
-    service_date = Column(DateTime, nullable=True, index=True)
+    service_date = Column(DateTime, nullable=False, index=True)
     location = Column(String, nullable=True)  # Where the data was obtained from
     body_parts = Column(Text, nullable=True)  # JSON array of affected body parts/systems
     

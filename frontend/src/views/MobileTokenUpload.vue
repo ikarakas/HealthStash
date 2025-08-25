@@ -79,6 +79,11 @@
             </select>
           </div>
           
+          <div class="date-select">
+            <label>Service Date: *</label>
+            <input v-model="serviceDate" type="date" required />
+          </div>
+          
           <button @click="uploadFiles" class="upload-btn">
             📤 Upload {{ selectedFiles.length }} file(s)
           </button>
@@ -113,6 +118,7 @@ const error = ref('')
 
 const selectedFiles = ref([])
 const selectedCategory = ref('other')
+const serviceDate = ref(new Date().toISOString().split('T')[0])
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadResults = ref([])
@@ -168,6 +174,12 @@ const removeFile = (index) => {
 const uploadFiles = async () => {
   if (selectedFiles.value.length === 0) return
   
+  // Validate service date
+  if (!serviceDate.value) {
+    error.value = 'Service date is required'
+    return
+  }
+  
   uploading.value = true
   uploadProgress.value = 0
   uploadResults.value = []
@@ -180,6 +192,7 @@ const uploadFiles = async () => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('category', selectedCategory.value)
+      formData.append('service_date', serviceDate.value)
       
       await axios.post(`/api/mobile/upload/${inputToken.value}`, formData, {
         headers: {

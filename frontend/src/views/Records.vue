@@ -341,8 +341,8 @@
             </div>
             
             <div class="form-group">
-              <label>Service Date</label>
-              <input v-model="newRecord.service_date" type="date">
+              <label>Service Date *</label>
+              <input v-model="newRecord.service_date" type="date" required>
             </div>
             
             <div class="form-group">
@@ -832,6 +832,13 @@ const handleFileSelect = (event) => {
 const createRecord = async () => {
   creatingRecord.value = true
   try {
+    // Validate service_date is provided
+    if (!newRecord.value.service_date) {
+      alert('Service date is required')
+      creatingRecord.value = false
+      return
+    }
+    
     // First create the record
     const recordData = {
       title: newRecord.value.title,
@@ -839,7 +846,7 @@ const createRecord = async () => {
       description: newRecord.value.description || '',
       provider_name: newRecord.value.provider_name || '',
       location: newRecord.value.location || '',
-      service_date: newRecord.value.service_date ? `${newRecord.value.service_date}T00:00:00` : null,
+      service_date: `${newRecord.value.service_date}T00:00:00`,
       content_text: newRecord.value.content_text || ''
     }
     

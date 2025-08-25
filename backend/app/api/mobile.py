@@ -117,6 +117,7 @@ async def mobile_upload_file(
     token: str,
     file: UploadFile = File(...),
     category: str = "other",
+    service_date: datetime = ...,  # Made mandatory
     db: Session = Depends(get_db),
     request: Request = None
 ):
@@ -141,6 +142,7 @@ async def mobile_upload_file(
         file=file,
         category=category,
         title=f"Mobile Upload - {file.filename}",
+        service_date=service_date,
         current_user=user,
         db=db
     )

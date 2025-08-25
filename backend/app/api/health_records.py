@@ -34,7 +34,7 @@ class CreateRecordRequest(BaseModel):
     description: Optional[str] = ""
     provider_name: Optional[str] = ""
     location: Optional[str] = ""
-    service_date: Optional[datetime] = None
+    service_date: datetime  # Made mandatory
     content_text: Optional[str] = ""
 
 @router.post("/")

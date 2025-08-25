@@ -37,6 +37,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/timeline',
+    name: 'Timeline',
+    component: () => import('@/views/Timeline.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/payments',
     name: 'PaymentVault',
     component: () => import('@/views/PaymentVault.vue'),

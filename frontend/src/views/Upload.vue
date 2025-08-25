@@ -84,11 +84,12 @@
       </div>
       
       <div class="form-group">
-        <label for="date">Service Date</label>
+        <label for="date">Service Date *</label>
         <input
           id="date"
           v-model="formData.service_date"
           type="date"
+          required
         />
       </div>
       
@@ -197,6 +198,13 @@ const handleUpload = async () => {
   success.value = false
   loading.value = true
   
+  // Validate service_date is provided
+  if (!formData.value.service_date) {
+    error.value = 'Service date is required'
+    loading.value = false
+    return
+  }
+  
   try {
     const data = new FormData()
     data.append('file', selectedFile.value)
@@ -204,7 +212,7 @@ const handleUpload = async () => {
     data.append('category', formData.value.category)
     if (formData.value.description) data.append('description', formData.value.description)
     if (formData.value.provider_name) data.append('provider_name', formData.value.provider_name)
-    if (formData.value.service_date) data.append('service_date', formData.value.service_date)
+    data.append('service_date', formData.value.service_date)
     
     await api.post('/files/upload', data, {
       headers: {

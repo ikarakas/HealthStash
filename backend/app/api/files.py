@@ -29,7 +29,7 @@ async def upload_file(
     title: str = None,
     description: str = None,
     provider_name: str = None,
-    service_date: datetime = None,
+    service_date: datetime = ...,  # Made mandatory
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -93,6 +93,10 @@ async def upload_file(
             category_enum = RecordCategory.OTHER
     except:
         category_enum = RecordCategory.OTHER
+    
+    # Validate service_date is provided
+    if not service_date:
+        raise HTTPException(status_code=400, detail="Service date is required")
     
     record = HealthRecord(
         id=str(uuid.uuid4()),
