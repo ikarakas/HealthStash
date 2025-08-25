@@ -74,7 +74,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { format, parseISO } from 'date-fns'
-import axios from 'axios'
+import api from '@/services/axios'
 import TimelineVisualization from '@/components/TimelineVisualization.vue'
 
 const router = useRouter()
@@ -105,9 +105,8 @@ function formatCategory(category) {
 async function fetchRecords() {
   try {
     loading.value = true
-    const response = await axios.get('/api/health-records', {
+    const response = await api.get('/records', {
       params: {
-        has_service_date: true,
         sort_by: 'service_date_desc',
         limit: 1000
       }

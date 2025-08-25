@@ -168,6 +168,15 @@ function drawTimeline() {
   ctx.fillStyle = '#f5f5f5'
   ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
   
+  // Draw header background for better label visibility
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvasWidth.value, 50)
+  ctx.strokeStyle = '#ddd'
+  ctx.beginPath()
+  ctx.moveTo(0, 50)
+  ctx.lineTo(canvasWidth.value, 50)
+  ctx.stroke()
+  
   // Draw grid and labels
   drawTimeGrid(ctx)
   
@@ -180,8 +189,8 @@ function drawTimeGrid(ctx) {
   const { start: visStart, end: visEnd } = visibleRange.value
   
   ctx.strokeStyle = '#e0e0e0'
-  ctx.fillStyle = '#666'
-  ctx.font = '12px system-ui'
+  ctx.fillStyle = '#333'
+  ctx.font = 'bold 14px system-ui'
   
   let intervals = []
   
@@ -199,12 +208,18 @@ function drawTimeGrid(ctx) {
       
     case 1: // Months
       let currentMonth = new Date(visStart.getFullYear(), visStart.getMonth(), 1)
+      const monthsVisible = differenceInMonths(visEnd, visStart)
+      const monthInterval = monthsVisible > 24 ? 2 : 1 // Show every 2nd month if more than 24 months visible
+      let monthCounter = 0
       while (currentMonth <= visEnd) {
-        intervals.push({
-          date: currentMonth,
-          label: format(currentMonth, 'MMM yyyy')
-        })
+        if (monthCounter % monthInterval === 0) {
+          intervals.push({
+            date: currentMonth,
+            label: format(currentMonth, 'MMM yyyy')
+          })
+        }
         currentMonth = addMonths(currentMonth, 1)
+        monthCounter++
       }
       break
       
@@ -222,21 +237,43 @@ function drawTimeGrid(ctx) {
       break
   }
   
+  // Track label positions to avoid overlap
+  const drawnLabels = []
+  
   intervals.forEach(({ date, label }) => {
     const x = getXPosition(date)
     if (x >= 0 && x <= canvasWidth.value) {
       // Draw vertical line
+      ctx.strokeStyle = '#e0e0e0'
+      ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(x, 50)
       ctx.lineTo(x, canvasHeight.value - 50)
       ctx.stroke()
       
-      // Draw label
-      ctx.save()
-      ctx.translate(x, 40)
-      ctx.textAlign = 'center'
-      ctx.fillText(label, 0, 0)
-      ctx.restore()
+      // Check if we have space for this label
+      const textWidth = ctx.measureText(label).width
+      const labelLeft = x - textWidth/2
+      const labelRight = x + textWidth/2
+      
+      const hasSpace = !drawnLabels.some(existing => 
+        (labelLeft < existing.right + 10 && labelRight > existing.left - 10)
+      )
+      
+      if (hasSpace) {
+        // Draw label with better styling
+        ctx.save()
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        
+        // Draw the text
+        ctx.fillStyle = '#1a202c'
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.fillText(label, x, 28)
+        ctx.restore()
+        
+        drawnLabels.push({ left: labelLeft, right: labelRight })
+      }
     }
   })
   
