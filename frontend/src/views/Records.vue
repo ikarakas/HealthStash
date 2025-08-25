@@ -21,6 +21,7 @@
         <option value="prescriptions">Prescriptions</option>
         <option value="vaccinations">Vaccinations</option>
         <option value="personal_notes">Personal Notes</option>
+        <option value="other">Other</option>
       </select>
       
       <div class="search-container">
@@ -207,7 +208,6 @@
                   <option value="prescriptions">Prescriptions</option>
                   <option value="vaccinations">Vaccinations</option>
                   <option value="personal_notes">Personal Notes</option>
-                  <option value="vital_signs">Vital Signs</option>
                   <option value="other">Other</option>
                 </select>
                 <div class="category-actions">
@@ -321,6 +321,7 @@
                 <option value="prescriptions">Prescriptions</option>
                 <option value="vaccinations">Vaccinations</option>
                 <option value="personal_notes">Personal Notes</option>
+                <option value="other">Other</option>
               </select>
             </div>
             

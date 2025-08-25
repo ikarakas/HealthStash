@@ -1,4 +1,4 @@
-.PHONY: help build up down logs restart clean backup restore test
+.PHONY: help build up down logs restart clean backup restore test wipe-data
 
 help:
 	@echo "HealthStash - Docker Management Commands"
@@ -14,6 +14,7 @@ help:
 	@echo "  make restore  - Restore from backup"
 	@echo "  make test     - Run tests"
 	@echo "  make init     - Initialize the application (first time setup)"
+	@echo "  make wipe-data - ⚠️  DELETE ALL DATA except users (DANGEROUS!)"
 
 init:
 	@chmod +x startup.sh
@@ -85,3 +86,10 @@ health:
 	@echo ""
 	@echo "Frontend Health:"
 	@curl -s http://localhost/ || echo "Frontend is not responding"
+
+# Data management
+wipe-data:
+	@echo "⚠️  WARNING: This will delete ALL DATA except user accounts!"
+	@echo "This includes all health records, payments, files, and backups."
+	@echo ""
+	@bash scripts/wipe-data.sh
