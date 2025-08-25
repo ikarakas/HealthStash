@@ -63,7 +63,7 @@ const userDisplay = computed(() => {
   return 'Guest'
 })
 
-const version = ref('0.0.5')
+const version = ref('0.0.6')
 const uptime = ref('0m')
 
 // Fetch server uptime
